@@ -1,0 +1,1909 @@
+// Restaurant OS: Phase 1 service core.
+// Conventions follow customer_os: shared schema, businessId on every tenant row,
+// composite keys so the database refuses cross-tenant references.
+// Money is stored as integer paisa. Times are UTC; display uses Business.timezone.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+  WAITER
+  KITCHEN
+  /// Delivers orders. Sees only the deliveries assigned to them.
+  RIDER
+}
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  QUICK_BILL
+  DELIVERY
+}
+
+enum DeliveryStatus {
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+}
+
+enum OrderStatus {
+  OPEN
+  SERVED
+  PAID
+  CANCELLED
+  /// Folded into another order; its items now live there.
+  MERGED
+}
+
+enum ItemStatus {
+  PENDING
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+enum TableState {
+  FREE
+  SEATED
+  BILL_REQUESTED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  QR
+  CREDIT
+}
+
+enum SubmissionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum RequestKind {
+  CALL_WAITER
+  REQUEST_BILL
+  WATER
+}
+
+enum RequestStatus {
+  OPEN
+  DONE
+}
+
+enum PoStatus {
+  /// Being written. Nothing has been asked of the supplier.
+  DRAFT
+  /// Staff say they placed it with the supplier.
+  ORDERED
+  /// Everything arrived, or staff closed it short.
+  RECEIVED
+  CANCELLED
+}
+
+enum MessageStatus {
+  /// Prepared for staff to send. Nothing has been sent by the app.
+  QUEUED
+  /// A staff member says they sent it.
+  SENT
+}
+
+enum StockMovementKind {
+  PURCHASE
+  /// Used up when a bill is paid, from the recipes of what was sold.
+  SALE
+  WASTE
+  /// A physical count corrected the book quantity.
+  COUNT
+  /// Sent to another branch.
+  TRANSFER_OUT
+  /// Received from another branch.
+  TRANSFER_IN
+}
+
+enum LoyaltyKind {
+  EARN
+  REDEEM
+  ADJUST
+  /// A refund took back earned points or returned spent ones.
+  REVERSAL
+}
+
+enum VatMode {
+  EXCLUSIVE
+  INCLUSIVE
+  NONE
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  notificationReads  NotificationRead[]
+  pushSubscriptions  PushSubscription[]
+  timeEntries        TimeEntry[]
+  email              String             @unique
+  name               String
+  passwordHash       String
+  /**
+   * Bumped on password change/reset so every older session stops working.
+   */
+  sessionVersion     Int                @default(0)
+  /**
+   * True after an admin sets a temporary password.
+   */
+  mustChangePassword Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  memberships        Membership[]
+}
+
+model Business {
+  id                        String   @id @default(cuid())
+  name                      String
+  panNumber                 String?
+  timezone                  String   @default("Asia/Kathmandu")
+  currency                  String   @default("NPR")
+  serviceChargeBps          Int      @default(1000)
+  vatMode                   VatMode  @default(EXCLUSIVE)
+  vatBps                    Int      @default(1300)
+  vatAppliesToServiceCharge Boolean  @default(true)
+  /// Charge VAT on the delivery fee too (off by default).
+  vatOnDeliveryFee          Boolean  @default(false)
+  roundToRupee              Boolean  @default(true)
+  /// Road distance as a percentage of the straight-line distance, used when no routing service is set up.
+  roadFactorPct             Int      @default(130)
+  invoiceCounter            Int      @default(0)
+  orderCounter              Int      @default(0)
+  creditNoteCounter         Int      @default(0)
+  poCounter                 Int      @default(0)
+  /// Ask guests to rate their visit after they pay.
+  feedbackEnabled           Boolean  @default(true)
+  /// Public Google review page shown to every guest who rates (never only to happy ones).
+  googleReviewUrl           String?
+  /**
+   * Guests may order from their phone by scanning the table QR.
+   */
+  guestOrderingEnabled      Boolean  @default(true)
+  /**
+   * Staff must accept a guest's order before it reaches the kitchen.
+   */
+  requireOrderApproval      Boolean  @default(true)
+  /// Show a "Best selling" section and badges on the guest menu.
+  /// Staff must be at their branch (by phone location) to clock in.
+  clockRequireLocation      Boolean  @default(false)
+  guestBestSellers          Boolean  @default(true)
+  /// Points on every paid bill that has a customer attached.
+  loyaltyEnabled            Boolean  @default(true)
+  /// Points earned per Rs 100 of the final bill.
+  pointsPer100              Int      @default(10)
+  /// Redeem in blocks: `redeemPoints` points are worth `redeemValue` paisa off the bill.
+  redeemPoints              Int      @default(100)
+  redeemValue               Int      @default(5000)
+  createdAt                 DateTime @default(now())
+
+  memberships      Membership[]
+  areas            Area[]
+  tables           DiningTable[]
+  categories       MenuCategory[]
+  items            MenuItem[]
+  orders           Order[]
+  invoices         Invoice[]
+  stations         Station[]
+  auditEvents      AuditEvent[]
+  tableSessions    TableSession[]
+  guestSubmissions GuestSubmission[]
+  serviceRequests  ServiceRequest[]
+  customers        Customer[]
+  creditNotes      CreditNote[]
+  dishRatings      DishRating[]
+  dishImages       DishImage[]
+  automationRules  AutomationRule[]
+  printSetting     PrintSetting?
+  printJobs        PrintJob[]
+  ownerSetting     OwnerSetting?
+  ownerAlerts      OwnerAlert[]
+  numberBlocks     OfflineNumberBlock[]
+  invoiceGaps      InvoiceGap[]
+  customerOsLink   CustomerOsLink?
+  customerOsEvents CustomerOsEvent[]
+  dayCloses        DayClose[]
+  feedback         Feedback[]
+  stockItems       StockItem[]
+  campaigns        Campaign[]
+  suppliers        Supplier[]
+  purchaseOrders   PurchaseOrder[]
+  branches         Branch[]
+  addOnGroups      AddOnGroup[]
+  menuSets         MenuSet[]
+  deliveryZones    DeliveryZone[]
+  deliveryBands    DeliveryBand[]
+}
+
+model Membership {
+  id                   String   @id @default(cuid())
+  userId               String
+  businessId           String
+  role                 Role
+  /// True: works in every branch (owners and managers). False: only the branches listed.
+  allBranches          Boolean  @default(true)
+  /// For riders: what they are paid for each completed delivery, in paisa.
+  deliveryPay          Int      @default(0)
+  /// How this person is paid: NONE (not tracked), HOURLY (rate per hour worked) or MONTHLY (fixed salary per month).
+  payType              PayType  @default(NONE)
+  /// Paisa per hour (HOURLY) or per month (MONTHLY).
+  payRate              Int      @default(0)
+  /// Overtime multiplier in basis points (15000 = 1.5 times) for HOURLY staff, on hours beyond the daily limit.
+  overtimeBps          Int      @default(15000)
+  /// Minutes in one day after which overtime starts (480 = 8 hours).
+  overtimeAfterMinutes Int      @default(480)
+  createdAt            DateTime @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branches MembershipBranch[]
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+}
+
+model Area {
+  id         String @id @default(cuid())
+  businessId String
+  /// The branch this area belongs to.
+  branchId   String
+  name       String
+  sortOrder  Int    @default(0)
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tables   DiningTable[]
+  branch   Branch        @relation(fields: [businessId, branchId], references: [businessId, id])
+
+  @@unique([businessId, id])
+  @@unique([branchId, name])
+}
+
+model DiningTable {
+  id          String     @id @default(cuid())
+  businessId  String
+  areaId      String
+  branchId    String
+  label       String
+  capacity    Int        @default(4)
+  state       TableState @default(FREE)
+  /**
+   * Secret in the printed QR code. Reset it if the QR leaks.
+   */
+  publicToken String     @unique @default(dbgenerated("(replace((gen_random_uuid())::text, '-'::text, ''::text) || replace((gen_random_uuid())::text, '-'::text, ''::text))"))
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area        Area              @relation(fields: [businessId, areaId], references: [businessId, id])
+  orders      Order[]
+  sessions    TableSession[]
+  submissions GuestSubmission[]
+  requests    ServiceRequest[]
+  branch      Branch            @relation(fields: [businessId, branchId], references: [businessId, id])
+
+  @@unique([businessId, id])
+  @@unique([branchId, label])
+  @@index([businessId, branchId])
+}
+
+/**
+ * Kitchen or bar station that receives tickets.
+ */
+model Station {
+  id         String @id @default(cuid())
+  businessId String
+  name       String
+
+  business  Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items     MenuItem[]
+  overrides BranchMenuItem[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+model MenuCategory {
+  id         String  @id @default(cuid())
+  businessId String
+  name       String
+  /// Optional Nepali name, shown to guests who pick Nepali.
+  nameNe     String?
+  sortOrder  Int     @default(0)
+
+  business Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items    MenuItem[]
+  hiddenAt BranchCategoryHide[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+model MenuItem {
+  id          String  @id @default(cuid())
+  businessId  String
+  categoryId  String
+  stationId   String?
+  name        String
+  /// Optional Nepali name, shown to guests who pick Nepali.
+  nameNe      String?
+  /**
+   * Base price in paisa.
+   */
+  price       Int
+  /**
+   * Target preparation time for ticket ageing.
+   */
+  prepMinutes Int     @default(15)
+  available   Boolean @default(true)
+
+  business    Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category    MenuCategory         @relation(fields: [businessId, categoryId], references: [businessId, id])
+  station     Station?             @relation(fields: [businessId, stationId], references: [businessId, id])
+  orderItems  OrderItem[]
+  recipe      RecipeLine[]
+  addOnGroups MenuItemAddOnGroup[]
+  menuSets    MenuSetItem[]
+  branchMenu  BranchMenuItem[]
+  image       DishImage?
+
+  @@unique([businessId, id])
+  @@index([businessId, categoryId])
+}
+
+model Order {
+  id                     String          @id @default(cuid())
+  businessId             String
+  /**
+   * Human number, unique per business, e.g. ORD-12.
+   */
+  number                 Int
+  branchId               String
+  type                   OrderType
+  status                 OrderStatus     @default(OPEN)
+  tableId                String?
+  note                   String?
+  /**
+   * Client-supplied key making "create order" safe to retry.
+   */
+  idempotencyKey         String?
+  createdById            String?
+  /// Who is paying, for loyalty. Staff-attached customers are confirmed; guest-typed numbers are not.
+  customerId             String?
+  customerConfirmed      Boolean         @default(false)
+  /// Set when this order was created by splitting another one.
+  splitFromId            String?
+  /// Set when this order was merged into another one.
+  mergedIntoId           String?
+  /// Why the whole order was cancelled (set with status CANCELLED).
+  cancelReason           String?
+  /// Delivery orders only.
+  deliveryName           String?
+  deliveryPhone          String?
+  deliveryAddress        String?
+  riderName              String?
+  /// The rider's own account, when one is assigned.
+  riderUserId            String?
+  /// The delivery run (batch) this order is part of, and its place in the planned route.
+  batchId                String?
+  batchStop              Int?
+  /// Distance entered for a distance-priced delivery, in metres.
+  deliveryDistanceMeters Int?
+  /// Where the rider last reported being, and when.
+  riderLat               Float?
+  riderLng               Float?
+  riderLocationAt        DateTime?
+  deliveryStatus         DeliveryStatus?
+  /// Fee in paisa, set when the order is made (from the zone). Added to the bill after tax.
+  deliveryFee            Int             @default(0)
+  deliveryZoneName       String?
+  /// Where to deliver, when a location was given (used for automatic distance and the in-app map).
+  destLat                Float?
+  destLng                Float?
+  /// Cash the rider collected at the door (the unpaid bill at delivery). Zero if it was already paid.
+  cashCollected          Int             @default(0)
+  deliveredAt            DateTime?
+  /// What the rider is owed for this delivery, copied from their rate when it was delivered.
+  riderPay               Int             @default(0)
+  /// Unguessable links: the customer's tracking page and the rider's page.
+  trackingToken          String?         @unique
+  riderToken             String?         @unique
+  createdAt              DateTime        @default(now())
+  closedAt               DateTime?
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  table    DiningTable?   @relation(fields: [businessId, tableId], references: [businessId, id])
+  customer Customer?      @relation(fields: [businessId, customerId], references: [businessId, id])
+  batch    DeliveryBatch? @relation(fields: [batchId], references: [id])
+  items    OrderItem[]
+  invoice  Invoice?
+  branch   Branch         @relation(fields: [businessId, branchId], references: [businessId, id])
+
+  @@unique([businessId, id])
+  @@unique([businessId, number])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, branchId, status])
+}
+
+model OrderItem {
+  id            String     @id @default(cuid())
+  businessId    String
+  orderId       String
+  menuItemId    String
+  /**
+   * Snapshot so later menu edits never change history.
+   */
+  name          String
+  unitPrice     Int
+  quantity      Int
+  note          String?
+  complimentary Boolean    @default(false)
+  status        ItemStatus @default(PENDING)
+  cancelReason  String?
+  createdAt     DateTime   @default(now())
+  statusAt      DateTime   @default(now())
+  /// When this item was printed on a kitchen slip (by a connected printer). Null = not printed yet.
+  printedAt     DateTime?
+
+  order    Order            @relation(fields: [businessId, orderId], references: [businessId, id], onDelete: Cascade)
+  menuItem MenuItem         @relation(fields: [businessId, menuItemId], references: [businessId, id])
+  addOns   OrderItemAddOn[]
+
+  @@index([businessId, orderId])
+  @@index([businessId, status])
+}
+
+model Invoice {
+  id              String    @id @default(cuid())
+  businessId      String
+  orderId         String
+  branchId        String
+  /**
+   * Sequential per business, never reused.
+   */
+  number          Int
+  subtotal        Int
+  discount        Int
+  serviceCharge   Int
+  vat             Int
+  roundOff        Int
+  grandTotal      Int
+  /// Reward discount from redeemed points (already inside grandTotal).
+  loyaltyDiscount Int       @default(0)
+  /// Delivery fee included in grandTotal (no service charge or VAT on it).
+  deliveryFee     Int       @default(0)
+  customerId      String?
+  pointsEarned    Int       @default(0)
+  pointsRedeemed  Int       @default(0)
+  createdAt       DateTime  @default(now())
+  /// Set only on a bill made on a phone with no connection: its own key (so a repeat send is harmless), the phone it came from
+  /// and when it reached the server. The invoice's date (createdAt) is when the sale really happened.
+  offlineKey      String?
+  offlineDeviceId String?
+  syncedAt        DateTime?
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  order       Order        @relation(fields: [businessId, orderId], references: [businessId, id])
+  customer    Customer?    @relation(fields: [businessId, customerId], references: [businessId, id])
+  payments    Payment[]
+  creditNotes CreditNote[]
+  feedback    Feedback?
+  dishRatings DishRating[]
+  branch      Branch       @relation(fields: [businessId, branchId], references: [businessId, id])
+
+  @@unique([businessId, id])
+  @@unique([businessId, number])
+  @@unique([businessId, offlineKey])
+  @@unique([businessId, orderId])
+  @@index([businessId, branchId, createdAt])
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  businessId String
+  invoiceId  String
+  method     PaymentMethod
+  amount     Int
+  createdAt  DateTime      @default(now())
+
+  invoice Invoice @relation(fields: [businessId, invoiceId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, invoiceId])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String?
+  action     String
+  entity     String
+  entityId   String
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+}
+
+/**
+ * One sitting at a table. Opened by a guest tapping "Start ordering"; closed at checkout.
+ */
+model TableSession {
+  id                String    @id @default(cuid())
+  businessId        String
+  tableId           String
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
+  /// Number the guest typed for loyalty. Unverified until staff confirm in person.
+  customerId        String?
+  /// How many times this sitting changed the number (abuse limit).
+  customerChanges   Int       @default(0)
+  /// The bill that ended this sitting, so the guest's phone can say what they earned.
+  closedByInvoiceId String?
+  /// Why the sitting ended: PAID, MOVED or MERGED. Lets the guest's phone say the right thing.
+  closeReason       String?
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  table       DiningTable       @relation(fields: [businessId, tableId], references: [businessId, id], onDelete: Cascade)
+  customer    Customer?         @relation(fields: [businessId, customerId], references: [businessId, id])
+  submissions GuestSubmission[]
+  requests    ServiceRequest[]
+
+  @@unique([businessId, id])
+  @@index([businessId, tableId, closedAt])
+}
+
+/**
+ * An order a guest sent from their phone, waiting for (or past) staff approval.
+ */
+model GuestSubmission {
+  id             String           @id @default(cuid())
+  businessId     String
+  tableId        String
+  sessionId      String
+  status         SubmissionStatus @default(PENDING)
+  /**
+   * Makes a double tap on "Place order" create one submission, not two.
+   */
+  idempotencyKey String
+  note           String?
+  rejectReason   String?
+  orderId        String?
+  createdAt      DateTime         @default(now())
+  decidedAt      DateTime?
+  decidedById    String?
+
+  business Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  table    DiningTable           @relation(fields: [businessId, tableId], references: [businessId, id], onDelete: Cascade)
+  session  TableSession          @relation(fields: [businessId, sessionId], references: [businessId, id], onDelete: Cascade)
+  items    GuestSubmissionItem[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status])
+}
+
+model GuestSubmissionItem {
+  id           String   @id @default(cuid())
+  businessId   String
+  submissionId String
+  menuItemId   String
+  /**
+   * Name and price as the guest saw them.
+   */
+  name         String
+  unitPrice    Int
+  quantity     Int
+  note         String?
+  /// Add-on choices the guest picked (checked again when staff accept).
+  addOnIds     String[] @default([])
+
+  submission GuestSubmission @relation(fields: [businessId, submissionId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, submissionId])
+}
+
+/**
+ * Call waiter, request the bill, ask for water. One open request per kind per sitting.
+ */
+model ServiceRequest {
+  id         String        @id @default(cuid())
+  businessId String
+  tableId    String
+  sessionId  String
+  kind       RequestKind
+  status     RequestStatus @default(OPEN)
+  createdAt  DateTime      @default(now())
+  doneAt     DateTime?
+  doneById   String?
+
+  business Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  table    DiningTable  @relation(fields: [businessId, tableId], references: [businessId, id], onDelete: Cascade)
+  session  TableSession @relation(fields: [businessId, sessionId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, status])
+}
+
+/**
+ * One row per sign-in (or password-check) attempt that counts against a limit.
+ * Pre-login, so it has no business. `key` is a SHA-256 of the email, IP or user id:
+ * we never store those in plain text here.
+ */
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  /// pair, ip, email or pw
+  scope     String
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([scope, key, createdAt])
+  @@index([createdAt])
+}
+
+/**
+ * A guest known to one business (their private view: phone, points, visits).
+ * Identity is the phone number in E.164 form. Numbers are unverified until OTP exists,
+ * so consent and redemption are guarded accordingly (see the loyalty service).
+ */
+model Customer {
+  id               String    @id @default(cuid())
+  businessId       String
+  /// E.164, e.g. +9779812345678
+  phone            String
+  name             String?
+  /// The guest ticked "keep me posted". Not usable for messages until consentVerified.
+  marketingConsent Boolean   @default(false)
+  consentVerified  Boolean   @default(false)
+  consentAt        DateTime?
+  pointsBalance    Int       @default(0)
+  visitCount       Int       @default(0)
+  /// Sum of final bills in paisa.
+  totalSpend       Int       @default(0)
+  firstSeenAt      DateTime  @default(now())
+  lastVisitAt      DateTime?
+  /// Month (1-12) and day (1-31) of the customer's birthday. No year is kept. Set by staff.
+  birthMonth       Int?
+  birthDay         Int?
+
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  entries          LoyaltyEntry[]
+  orders           Order[]
+  invoices         Invoice[]
+  sessions         TableSession[]
+  campaignMessages CampaignMessage[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, phone])
+  @@index([businessId, lastVisitAt])
+}
+
+/// The points ledger. pointsBalance on Customer is a cache of the sum of these rows.
+model LoyaltyEntry {
+  id          String      @id @default(cuid())
+  businessId  String
+  customerId  String
+  kind        LoyaltyKind
+  /// Positive for earn, negative for redeem. Adjustments can be either.
+  points      Int
+  invoiceId   String?
+  note        String?
+  createdById String?
+  createdAt   DateTime    @default(now())
+
+  customer Customer @relation(fields: [businessId, customerId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, customerId, createdAt])
+}
+
+/**
+ * A full refund of one invoice. The invoice is never edited: this is a separate, numbered
+ * document with its own sequence, dated when the refund happened. The amounts are copies of
+ * the invoice's, as positive numbers that reports subtract.
+ */
+model CreditNote {
+  id              String   @id @default(cuid())
+  businessId      String
+  invoiceId       String
+  /// Sequential per business, never reused, separate from invoice numbers.
+  number          Int
+  subtotal        Int
+  discount        Int
+  loyaltyDiscount Int      @default(0)
+  serviceCharge   Int
+  vat             Int
+  roundOff        Int
+  grandTotal      Int
+  reason          String
+  /// True when only part of the invoice was refunded by this note (an invoice can have several).
+  partial         Boolean  @default(false)
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoice  Invoice         @relation(fields: [businessId, invoiceId], references: [businessId, id])
+  refunds  RefundPayment[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, number])
+  @@index([businessId, invoiceId])
+  @@index([businessId, createdAt])
+}
+
+/// Money handed back, by the method it was originally paid with.
+model RefundPayment {
+  id           String        @id @default(cuid())
+  businessId   String
+  creditNoteId String
+  method       PaymentMethod
+  amount       Int
+
+  creditNote CreditNote @relation(fields: [businessId, creditNoteId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, creditNoteId])
+}
+
+/**
+ * The end-of-day count. `date` is the business's own calendar day (YYYY-MM-DD in its time zone).
+ * While a day is closed nothing new is posted to it. The snapshot keeps the totals as they were
+ * at closing so the report cannot drift afterwards.
+ */
+model DayClose {
+  id           String   @id @default(cuid())
+  businessId   String
+  branchId     String
+  date         String
+  closedAt     DateTime @default(now())
+  closedById   String
+  /// Cash that should be in the drawer: cash taken minus cash refunded that day.
+  expectedCash Int
+  countedCash  Int
+  /// counted minus expected: negative means cash is missing.
+  difference   Int
+  note         String?
+  snapshot     Json
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [businessId, branchId], references: [businessId, id])
+
+  @@unique([branchId, date])
+}
+
+/**
+ * A guest's rating of one visit, tied to the invoice that ended it. It carries no name, phone
+ * or customer link: staff see the table, invoice number and time, and nothing else about who wrote it.
+ */
+model Feedback {
+  id          String    @id @default(cuid())
+  businessId  String
+  invoiceId   String
+  /// 1 to 5 stars.
+  rating      Int
+  comment     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  /// A manager looked into a low rating and wrote down what was done.
+  handledAt   DateTime?
+  handledById String?
+  handledNote String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoice  Invoice  @relation(fields: [businessId, invoiceId], references: [businessId, id])
+
+  /// One rating per visit: a repeat tap updates it instead of adding another.
+  @@unique([businessId, invoiceId])
+  @@index([businessId, createdAt])
+  @@index([businessId, rating, handledAt])
+}
+
+/// The photo of a dish, kept in the database (already shrunk by the browser before upload). One per dish.
+model DishImage {
+  id          String   @id @default(cuid())
+  businessId  String
+  menuItemId  String
+  contentType String
+  bytes       Int
+  data        Bytes
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [businessId, menuItemId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, menuItemId])
+  @@index([businessId])
+}
+
+/// A guest's star rating of one dish they had on a paid visit. Optional, no name or phone, one per dish per visit.
+model DishRating {
+  id         String   @id @default(cuid())
+  businessId String
+  invoiceId  String
+  /// Not a foreign key: a dish can be removed from the menu and its past ratings stay.
+  menuItemId String
+  /// 1 to 5 stars.
+  rating     Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoice  Invoice  @relation(fields: [businessId, invoiceId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, invoiceId, menuItemId])
+  @@index([businessId, menuItemId])
+}
+
+/**
+ * Something the kitchen uses up: flour, milk, a bottle of cola. Quantities are whole numbers
+ * of the item's base unit (grams, millilitres or pieces), so there is no rounding drift.
+ * `quantity` is a cache of the movement history and may go below zero: a busy kitchen keeps
+ * selling while the book is behind, and a negative number is the prompt to count.
+ */
+model StockItem {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  /// g, ml or piece
+  unit       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business  Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  movements StockMovement[]
+  recipes   RecipeLine[]
+  poLines   PurchaseOrderLine[]
+  addOnUse  AddOnStock[]
+  levels    BranchStock[]
+  transfers StockTransfer[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+/// How much of a stock item one portion of a dish uses.
+model RecipeLine {
+  id          String @id @default(cuid())
+  businessId  String
+  menuItemId  String
+  stockItemId String
+  /// Base units per portion.
+  quantity    Int
+
+  menuItem  MenuItem  @relation(fields: [businessId, menuItemId], references: [businessId, id], onDelete: Cascade)
+  stockItem StockItem @relation(fields: [businessId, stockItemId], references: [businessId, id])
+
+  @@unique([menuItemId, stockItemId])
+  @@index([businessId, menuItemId])
+}
+
+/// Every change to a stock quantity, with the cost at the time. The ledger is the truth.
+model StockMovement {
+  id            String            @id @default(cuid())
+  businessId    String
+  branchId      String
+  stockItemId   String
+  kind          StockMovementKind
+  /// Signed: purchases are positive, sales and waste negative, counts either way.
+  quantity      Int
+  /// Cost of one unit when this happened (thousandths of a paisa).
+  unitCostMilli Int               @default(0)
+  /// quantity * cost, in paisa, same sign as quantity.
+  totalCost     Int               @default(0)
+  invoiceId     String?
+  supplier      String?
+  note          String?
+  createdById   String?
+  createdAt     DateTime          @default(now())
+
+  stockItem StockItem @relation(fields: [businessId, stockItemId], references: [businessId, id], onDelete: Cascade)
+  branch    Branch    @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, stockItemId, createdAt])
+  @@index([businessId, kind, createdAt])
+  @@index([businessId, branchId, createdAt])
+}
+
+/**
+ * A message to one group of customers, prepared once. The app never sends it: staff copy the
+ * text, open it in their phone's messaging app, or export the list, then mark it sent.
+ */
+model Campaign {
+  id          String    @id @default(cuid())
+  businessId  String
+  name        String
+  /// NEW, RETURNING, REGULAR, VIP, AT_RISK, LOST or NO_VISIT (see the segment rules).
+  segment     String
+  /// Text with {name}, {points}, {days} and {business} placeholders.
+  template    String
+  /// Bonus points given when the guest comes back and pays within offerDays of being messaged. 0 = no offer.
+  offerPoints Int       @default(0)
+  offerDays   Int       @default(14)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  /// Set once the audience has been worked out. A prepared campaign cannot be changed.
+  preparedAt  DateTime?
+  /// Set only on campaigns made by an automatic rule: "<KIND>:<local date>". One per rule per day.
+  autoKey     String?
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages CampaignMessage[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, autoKey])
+  @@index([businessId, createdAt])
+}
+
+/// An automatic message rule: a birthday offer or a win-back for guests who have not been for a while. Off by default.
+model AutomationRule {
+  id           String   @id @default(cuid())
+  businessId   String
+  /// BIRTHDAY or WIN_BACK. One rule of each kind per business.
+  kind         String
+  enabled      Boolean  @default(false)
+  /// false: the day's messages are prepared for staff to send. true: they are sent through the messaging provider.
+  autoSend     Boolean  @default(false)
+  template     String
+  offerPoints  Int      @default(0)
+  offerDays    Int      @default(14)
+  /// The same guest is not given this kind of message again within this many days.
+  cooldownDays Int      @default(60)
+  /// Who switched automatic sending on: the account whose permission the sending runs under.
+  enabledById  String?
+  updatedAt    DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, kind])
+}
+
+/// One prepared message for one customer. It holds no phone number: that is read from the customer when needed.
+model CampaignMessage {
+  id                String        @id @default(cuid())
+  businessId        String
+  campaignId        String
+  customerId        String
+  /// The text with the customer's details filled in.
+  text              String
+  status            MessageStatus @default(QUEUED)
+  sentAt            DateTime?
+  sentById          String?
+  offerPoints       Int           @default(0)
+  expiresAt         DateTime?
+  redeemedAt        DateTime?
+  redeemedInvoiceId String?
+  createdAt         DateTime      @default(now())
+
+  campaign Campaign @relation(fields: [businessId, campaignId], references: [businessId, id], onDelete: Cascade)
+  customer Customer @relation(fields: [businessId, customerId], references: [businessId, id], onDelete: Cascade)
+
+  /// A customer is in a campaign at most once.
+  @@unique([campaignId, customerId])
+  @@index([businessId, customerId, createdAt])
+}
+
+/// Someone stock is bought from. Their phone number is kept so staff can message them themselves.
+model Supplier {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  /// E.164, optional.
+  phone      String?
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+  bills          SupplierBill[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+/**
+ * An order for stock from one supplier. The app records it and the delivery; it does not send
+ * the order: staff pass it on themselves (phone, message, in person) and mark it ordered.
+ */
+model PurchaseOrder {
+  id          String    @id @default(cuid())
+  businessId  String
+  /// The branch the goods are delivered to.
+  branchId    String
+  /// Sequential per business, never reused.
+  number      Int
+  supplierId  String
+  status      PoStatus  @default(DRAFT)
+  note        String?
+  /// The date it is expected, as YYYY-MM-DD.
+  expectedOn  String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  orderedAt   DateTime?
+  receivedAt  DateTime?
+  cancelledAt DateTime?
+  /// Why it was cancelled, or why it was closed with items missing.
+  closeNote   String?
+
+  business Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplier Supplier            @relation(fields: [businessId, supplierId], references: [businessId, id])
+  branch   Branch              @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  lines    PurchaseOrderLine[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, number])
+  @@index([businessId, status])
+  @@index([businessId, branchId, status])
+}
+
+model PurchaseOrderLine {
+  id               String @id @default(cuid())
+  businessId       String
+  purchaseOrderId  String
+  stockItemId      String
+  /// Base units (g, ml or piece) asked for.
+  quantityOrdered  Int
+  quantityReceived Int    @default(0)
+  /// What we expected to pay for the whole line, in paisa.
+  estimatedTotal   Int    @default(0)
+  /// What was actually paid for everything received so far, in paisa.
+  paidTotal        Int    @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [businessId, purchaseOrderId], references: [businessId, id], onDelete: Cascade)
+  stockItem     StockItem     @relation(fields: [businessId, stockItemId], references: [businessId, id])
+
+  @@unique([purchaseOrderId, stockItemId])
+  @@index([businessId, stockItemId])
+}
+
+/**
+ * One place the business trades from. Floor, orders, invoices and the day's cash belong to a
+ * branch, and so do stock levels, purchase orders and stock history. Menu, recipes, customers, loyalty and suppliers are
+ * shared by the whole business.
+ */
+model Branch {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  address    String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business          Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  areas             Area[]
+  tables            DiningTable[]
+  orders            Order[]
+  invoices          Invoice[]
+  dayCloses         DayClose[]
+  staffAccess       MembershipBranch[]
+  deliveryZones     DeliveryZone[]
+  deliveryBands     DeliveryBand[]
+  stockLevels       BranchStock[]
+  menuOverrides     BranchMenuItem[]
+  hiddenCategories  BranchCategoryHide[]
+  addOnOverrides    BranchAddOn[]
+  deliveryBatches   DeliveryBatch[]
+  stockMovements    StockMovement[]
+  purchaseOrders    PurchaseOrder[]
+  transfersOut      StockTransfer[]      @relation("TransferFrom")
+  transfersIn       StockTransfer[]      @relation("TransferTo")
+  menuSchedules     MenuSchedule[]
+  /// Menu set chosen by hand for this branch. Null: follow the schedule, or the whole menu when none applies.
+  activeMenuSetId   String?
+  /// Where the branch is, for automatic delivery distance and the in-app map.
+  latitude          Float?
+  longitude         Float?
+  /// How close (metres) staff must be to the branch's location to clock in, when clocking by location is required.
+  clockRadiusMeters Int                  @default(150)
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+/// Which branches a restricted staff member may work in.
+model MembershipBranch {
+  membershipId String
+  branchId     String
+  businessId   String
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  branch     Branch     @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([membershipId, branchId])
+  @@index([businessId, branchId])
+}
+
+// --- add-ons and extras ----------------------------------------------------------
+
+/// A set of choices for a dish, e.g. "Size" or "Extras". Shared by the whole business.
+model AddOnGroup {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  /// The guest or waiter must pick something from this group.
+  required   Boolean  @default(false)
+  /// More than one choice allowed (extras). False: pick one (size).
+  multiple   Boolean  @default(false)
+  active     Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  business Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  addOns   AddOn[]
+  items    MenuItemAddOnGroup[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+model AddOn {
+  id         String  @id @default(cuid())
+  businessId String
+  groupId    String
+  name       String
+  /// Extra price in paisa (0 for a free choice).
+  price      Int     @default(0)
+  active     Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  group           AddOnGroup    @relation(fields: [businessId, groupId], references: [businessId, id], onDelete: Cascade)
+  stock           AddOnStock[]
+  branchOverrides BranchAddOn[]
+
+  @@unique([businessId, id])
+  @@unique([groupId, name])
+}
+
+model MenuItemAddOnGroup {
+  businessId String
+  menuItemId String
+  groupId    String
+
+  menuItem MenuItem   @relation(fields: [businessId, menuItemId], references: [businessId, id], onDelete: Cascade)
+  group    AddOnGroup @relation(fields: [businessId, groupId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([menuItemId, groupId])
+  @@index([businessId, groupId])
+}
+
+/// What was chosen on an order line, copied so later menu edits never change history.
+model OrderItemAddOn {
+  id          String  @id @default(cuid())
+  businessId  String
+  orderItemId String
+  /// Which add-on it was (kept so its stock use can be taken off). Not a foreign key: add-ons are only ever switched off.
+  addOnId     String?
+  name        String
+  /// Already included in the line's unitPrice.
+  price       Int
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, orderItemId])
+}
+
+// --- menu sets and schedules -----------------------------------------------------
+
+/// A named part of the menu (Breakfast, Lunch). Dishes not in the active set cannot be ordered.
+model MenuSet {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  createdAt  DateTime @default(now())
+
+  business  Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items     MenuSetItem[]
+  schedules MenuSchedule[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+}
+
+model MenuSetItem {
+  businessId String
+  menuSetId  String
+  menuItemId String
+
+  menuSet  MenuSet  @relation(fields: [businessId, menuSetId], references: [businessId, id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [businessId, menuItemId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([menuSetId, menuItemId])
+  @@index([businessId, menuItemId])
+}
+
+/// Use this set on this weekday between two times of day (the business's own time zone).
+model MenuSchedule {
+  id          String @id @default(cuid())
+  businessId  String
+  branchId    String
+  menuSetId   String
+  /// 0 = Sunday ... 6 = Saturday.
+  dayOfWeek   Int
+  /// Minutes after midnight. End is exclusive.
+  startMinute Int
+  endMinute   Int
+
+  menuSet MenuSet @relation(fields: [businessId, menuSetId], references: [businessId, id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, branchId, dayOfWeek])
+}
+
+// --- delivery zones, add-on stock use, notification read state ----------------------
+
+/// A delivery area of one branch with its fee (paisa).
+model DeliveryZone {
+  id         String   @id @default(cuid())
+  businessId String
+  branchId   String
+  name       String
+  fee        Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, id])
+  @@unique([branchId, name])
+}
+
+/// Stock used each time this add-on is chosen (one unit of the add-on per dish ordered).
+model AddOnStock {
+  businessId  String
+  addOnId     String
+  stockItemId String
+  /// In the stock item's base unit (g, ml, piece).
+  quantity    Int
+
+  addOn     AddOn     @relation(fields: [businessId, addOnId], references: [businessId, id], onDelete: Cascade)
+  stockItem StockItem @relation(fields: [businessId, stockItemId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([addOnId, stockItemId])
+  @@index([businessId, stockItemId])
+}
+
+/// A notification a team member has marked as read. The key names the thing it was about,
+/// so a new notification about something else is unread again.
+model NotificationRead {
+  userId     String
+  businessId String
+  key        String
+  readAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@index([businessId])
+}
+
+// --- distance pricing and background push -------------------------------------------
+
+/// Delivery up to this distance costs this fee. Used instead of zones when a branch has any.
+model DeliveryBand {
+  id         String   @id @default(cuid())
+  businessId String
+  branchId   String
+  /// Upper limit of the band, in metres (inclusive).
+  upToMeters Int
+  fee        Int
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, id])
+  @@unique([branchId, upToMeters])
+}
+
+/// A browser or phone that agreed to receive alerts when the app is closed (Web Push).
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, userId])
+}
+
+// --- rider cash and pay, push de-duplication -----------------------------------------
+
+enum TransferStatus {
+  /// Left the sending branch; not yet booked in at the receiving one.
+  IN_TRANSIT
+  RECEIVED
+  /// Called off: the stock went back to the sending branch.
+  CANCELLED
+}
+
+enum RiderEntryKind {
+  /// The rider handed cash they collected from customers to the branch.
+  CASH_HANDIN
+  /// The branch paid the rider for completed deliveries.
+  PAYOUT
+}
+
+/// A line in a rider's account: cash handed in, or pay given out. Never edited or deleted.
+model RiderEntry {
+  id          String         @id @default(cuid())
+  businessId  String
+  branchId    String
+  riderUserId String
+  kind        RiderEntryKind
+  /// Paisa, always positive.
+  amount      Int
+  note        String?
+  createdById String?
+  createdAt   DateTime       @default(now())
+
+  @@index([businessId, riderUserId, createdAt])
+}
+
+/// Remembers which alerts were already pushed so a scheduled check does not repeat itself.
+model PushLog {
+  businessId String
+  key        String
+  sentAt     DateTime @default(now())
+
+  @@id([businessId, key])
+}
+
+// --- stock by branch ---------------------------------------------------------------------
+
+/**
+ * How much of a stock item one branch holds. The item itself (name, unit) and the recipes are shared by the
+ * business; what is on the shelf, when to reorder and what it cost on average are per branch.
+ */
+model BranchStock {
+  businessId   String
+  branchId     String
+  stockItemId  String
+  quantity     Int     @default(0)
+  /// Warn when the quantity falls to this or below. 0 means no warning.
+  reorderLevel Int     @default(0)
+  /// Average cost of one unit in thousandths of a paisa (so cheap items keep their precision).
+  costMilli    Int     @default(0)
+  /// False: this branch does not stock the item (hidden from its lists, alerts and orders; sales do not touch it).
+  active       Boolean @default(true)
+
+  branch    Branch    @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  stockItem StockItem @relation(fields: [businessId, stockItemId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([branchId, stockItemId])
+  @@index([businessId, stockItemId])
+}
+
+/// Stock sent from one branch to another. It leaves the sender at once and, unless sent as "arrives now", stays in transit
+/// until the receiving branch books it in (or it is cancelled and returns). Each step writes a movement.
+model StockTransfer {
+  id               String         @id @default(cuid())
+  businessId       String
+  fromBranchId     String
+  toBranchId       String
+  stockItemId      String
+  quantity         Int
+  /// Cost per unit at the sending branch when it left (thousandths of a paisa).
+  unitCostMilli    Int            @default(0)
+  note             String?
+  createdById      String?
+  createdAt        DateTime       @default(now())
+  status           TransferStatus @default(RECEIVED)
+  /// What the receiving branch counted in. Less than `quantity` means some was lost on the way.
+  receivedQuantity Int?
+  receivedAt       DateTime?
+  receivedById     String?
+  cancelledAt      DateTime?
+  cancelledById    String?
+
+  from      Branch    @relation("TransferFrom", fields: [businessId, fromBranchId], references: [businessId, id], onDelete: Cascade)
+  to        Branch    @relation("TransferTo", fields: [businessId, toBranchId], references: [businessId, id], onDelete: Cascade)
+  stockItem StockItem @relation(fields: [businessId, stockItemId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@index([businessId, fromBranchId, createdAt])
+  @@index([businessId, toBranchId, createdAt])
+  @@index([businessId, status])
+}
+
+// --- per-branch menu --------------------------------------------------------------------
+
+/**
+ * How one branch differs from the shared menu for a dish. No row means "same as the shared menu". A price of null means
+ * the shared price; `available` false hides the dish at this branch only (the dish's own switch hides it everywhere).
+ */
+model BranchMenuItem {
+  businessId String
+  branchId   String
+  menuItemId String
+  /// This branch's price in paisa, or null to use the dish's shared price.
+  price      Int?
+  available  Boolean @default(true)
+  /// This branch sends the dish to a different kitchen station (null = the dish's own station).
+  stationId  String?
+
+  branch   Branch   @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [businessId, menuItemId], references: [businessId, id], onDelete: Cascade)
+  station  Station? @relation(fields: [businessId, stationId], references: [businessId, id])
+
+  @@id([branchId, menuItemId])
+  @@index([businessId, menuItemId])
+}
+
+// --- enums for the newer areas --------------------------------------------------------------
+
+enum SupplierPayMethod {
+  CASH
+  BANK
+  QR
+  CHEQUE
+  OTHER
+}
+
+enum PayType {
+  NONE
+  HOURLY
+  MONTHLY
+}
+
+enum TimeSource {
+  /// The person clocked in and out themselves.
+  CLOCK
+  /// A manager typed or corrected it.
+  MANUAL
+}
+
+enum PayAdjustKind {
+  ALLOWANCE
+  BONUS
+  /// Money already given in advance, taken off.
+  ADVANCE
+  DEDUCTION
+}
+
+enum BatchStatus {
+  PLANNED
+  OUT
+  DONE
+}
+
+enum SendStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// --- supplier bills and payments -----------------------------------------------------------------
+
+/// What a supplier is owed for goods: their invoice. Paid in one or more payments; never deleted, only voided.
+model SupplierBill {
+  id              String    @id @default(cuid())
+  businessId      String
+  supplierId      String
+  /// The branch the goods were for (or where it was entered).
+  branchId        String
+  /// The supplier's own invoice number, if they gave one.
+  number          String?
+  /// YYYY-MM-DD.
+  billDate        String
+  dueDate         String?
+  /// Total on the bill, in paisa.
+  amount          Int
+  note            String?
+  /// The purchase order it is for, if any.
+  purchaseOrderId String?
+  voidedAt        DateTime?
+  voidReason      String?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+
+  supplier Supplier          @relation(fields: [businessId, supplierId], references: [businessId, id], onDelete: Cascade)
+  payments SupplierPayment[]
+
+  @@unique([businessId, id])
+  @@index([businessId, supplierId])
+  @@index([businessId, dueDate])
+}
+
+model SupplierPayment {
+  id          String            @id @default(cuid())
+  businessId  String
+  billId      String
+  amount      Int
+  method      SupplierPayMethod
+  /// YYYY-MM-DD.
+  paidOn      String
+  /// Cheque number, transaction id or similar.
+  reference   String?
+  note        String?
+  createdById String?
+  createdAt   DateTime          @default(now())
+
+  bill SupplierBill @relation(fields: [businessId, billId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, billId])
+}
+
+// --- staff time and payroll ------------------------------------------------------------------------
+
+model TimeEntry {
+  id           String     @id @default(cuid())
+  businessId   String
+  branchId     String
+  userId       String
+  clockIn      DateTime
+  /// Null while the person is still clocked in.
+  clockOut     DateTime?
+  source       TimeSource @default(CLOCK)
+  note         String?
+  /// How far from the branch the phone was when clocking in and out (metres), when location was checked. No coordinates are kept.
+  inDistanceM  Int?
+  outDistanceM Int?
+  /// Clocked out while away from the branch (allowed, so nobody is stuck on the clock, but the owner is told).
+  outAway      Boolean    @default(false)
+  editedById   String?
+  createdAt    DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, userId, clockIn])
+  @@index([businessId, branchId, clockIn])
+}
+
+/// Extra pay or money taken off in one month, outside hours worked.
+model PayAdjustment {
+  id          String        @id @default(cuid())
+  businessId  String
+  userId      String
+  /// The month it belongs to, YYYY-MM.
+  period      String
+  kind        PayAdjustKind
+  /// Paisa, always positive.
+  amount      Int
+  note        String?
+  createdById String?
+  createdAt   DateTime      @default(now())
+
+  @@index([businessId, period, userId])
+}
+
+/// A finished payroll for a period. Its lines are a copy of what was worked out then and are never recalculated.
+model PayrollRun {
+  id            String   @id @default(cuid())
+  businessId    String
+  /// YYYY-MM-DD, inclusive.
+  periodStart   String
+  periodEnd     String
+  note          String?
+  finalizedById String?
+  createdAt     DateTime @default(now())
+
+  lines PayrollLine[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, periodStart, periodEnd])
+}
+
+model PayrollLine {
+  id              String    @id @default(cuid())
+  businessId      String
+  runId           String
+  userId          String
+  /// The person's name when the payroll was made.
+  name            String
+  payType         PayType
+  rate            Int
+  regularMinutes  Int       @default(0)
+  overtimeMinutes Int       @default(0)
+  basePay         Int       @default(0)
+  overtimePay     Int       @default(0)
+  additions       Int       @default(0)
+  deductions      Int       @default(0)
+  /// Before any tax or statutory deductions, which this app does not work out.
+  netPay          Int       @default(0)
+  paidAt          DateTime?
+  paidMethod      String?
+  paidById        String?
+
+  run PayrollRun @relation(fields: [businessId, runId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, userId])
+}
+
+// --- per-branch categories and add-on prices -----------------------------------------------------------
+
+/// A row here means this branch does not show the category (and its dishes) at all.
+model BranchCategoryHide {
+  businessId String
+  branchId   String
+  categoryId String
+
+  branch   Branch       @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  category MenuCategory @relation(fields: [businessId, categoryId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([branchId, categoryId])
+}
+
+/// How a branch differs for one add-on choice. No row: the shared price and always offered.
+model BranchAddOn {
+  businessId String
+  branchId   String
+  addOnId    String
+  /// This branch's extra price in paisa, or null for the shared price.
+  price      Int?
+  available  Boolean @default(true)
+
+  branch Branch @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  addOn  AddOn  @relation(fields: [businessId, addOnId], references: [businessId, id], onDelete: Cascade)
+
+  @@id([branchId, addOnId])
+}
+
+// --- delivery runs and remembered places -----------------------------------------------------------------
+
+/// Several deliveries one rider takes in one trip, with the order to visit them planned.
+model DeliveryBatch {
+  id            String      @id @default(cuid())
+  businessId    String
+  branchId      String
+  riderUserId   String?
+  riderName     String?
+  status        BatchStatus @default(PLANNED)
+  /// Planned length of the whole trip in metres (straight lines stretched by the road factor), 0 if not known.
+  plannedMeters Int         @default(0)
+  createdById   String?
+  createdAt     DateTime    @default(now())
+  startedAt     DateTime?
+  doneAt        DateTime?
+
+  branch Branch  @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([businessId, branchId, status])
+}
+
+/// A delivery address that was located before, found again by phone number so staff need not look it up each time.
+model DeliveryPlace {
+  id         String   @id @default(cuid())
+  businessId String
+  /// The phone number with everything but digits removed.
+  phoneKey   String
+  address    String
+  lat        Float
+  lng        Float
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, phoneKey])
+}
+
+// --- campaign messages actually sent ----------------------------------------------------------------------
+
+/// One message to one customer for one campaign. A customer is never sent the same campaign twice.
+model MessageLog {
+  id          String     @id @default(cuid())
+  businessId  String
+  campaignId  String
+  customerId  String
+  /// The number with the middle hidden, for the record.
+  phoneMasked String
+  status      SendStatus
+  /// The provider's message id, when it gave one.
+  providerRef String?
+  error       String?
+  createdById String?
+  createdAt   DateTime   @default(now())
+
+  @@unique([campaignId, customerId])
+  @@index([businessId, campaignId])
+}
+
+/// How receipts and kitchen slips are laid out for this business. One row. Paper size is free: any width, and a fixed height
+/// or "as long as the content". The same layout feeds the PDF download, the printer file and the print queue.
+model PrintSetting {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  /// Paper width in millimetres (58 and 80 are the usual thermal rolls; any 40 to 300 works).
+  paperWidthMm     Int      @default(80)
+  /// Fixed paper height in millimetres, or null for "as long as the content needs".
+  paperHeightMm    Int?
+  marginMm         Int      @default(4)
+  /// Text size in tenths of a point (90 = 9 pt).
+  fontSizeTenthPt  Int      @default(90)
+  /// An extra line under the business name (a slogan, phone number, address).
+  headerLine       String?
+  footerLine       String   @default("Thank you!")
+  showPan          Boolean  @default(true)
+  showAddress      Boolean  @default(true)
+  showCustomer     Boolean  @default(true)
+  /// Kitchen slips in larger text.
+  kitchenLargeText Boolean  @default(true)
+  /// Queue a kitchen slip for a connected printer whenever items are added to an order.
+  autoKitchenPrint Boolean  @default(false)
+  receiptCopies    Int      @default(1)
+  /// Fingerprint (SHA-256) of the key the printer program uses to collect jobs. The key itself is never kept.
+  agentKeyHash     String?
+  updatedAt        DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+/// Something waiting for a printer: a kitchen slip, a receipt or a credit note. A small program next to the printer collects
+/// the queued jobs (see README, "Printers"), prints them and reports back.
+model PrintJob {
+  id           String    @id @default(cuid())
+  businessId   String
+  branchId     String
+  /// KITCHEN, RECEIPT or CREDIT_NOTE.
+  kind         String
+  orderId      String?
+  invoiceId    String?
+  creditNoteId String?
+  /// QUEUED, PRINTED, FAILED or CANCELLED.
+  status       String    @default("QUEUED")
+  attempts     Int       @default(0)
+  error        String?
+  /// When a printer program last collected this job; one it never finished is offered again after a couple of minutes.
+  claimedAt    DateTime?
+  /// The order items on a kitchen slip, so exactly those are marked printed once the printer confirms.
+  itemIds      String[]  @default([])
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  printedAt    DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, branchId, status, createdAt])
+}
+
+/// The owner's controls: the daily summary and the thresholds for suspicious-activity alerts. One row per business.
+model OwnerSetting {
+  id                    String   @id @default(cuid())
+  businessId            String   @unique
+  summaryEnabled        Boolean  @default(false)
+  /// Local hour (0-23) the daily summary is sent, after that day's trading.
+  summaryHour           Int      @default(22)
+  channelPush           Boolean  @default(true)
+  /// Phone number for the summary by text message (needs a messaging provider on the server).
+  smsPhone              String?
+  /// Address for the summary by email (needs an email service on the server).
+  email                 String?
+  lastSummaryDate       String?
+  alertsEnabled         Boolean  @default(true)
+  /// Alert when this many bills are cancelled in a day.
+  alertVoidCount        Int      @default(3)
+  /// Alert when cancelled bills add up to this much in a day (paisa).
+  alertVoidAmount       Int      @default(500000)
+  /// Alert on any single bill with a discount of at least this percent.
+  alertDiscountPct      Int      @default(20)
+  /// Alert when discounts are at least this share of the day's sales (basis points: 1000 = 10%).
+  alertDiscountShareBps Int      @default(1000)
+  /// Alert on any refund of at least this much (paisa).
+  alertRefundAmount     Int      @default(500000)
+  /// Alert when the counted cash differs from what it should be by at least this much (paisa).
+  alertCashDiff         Int      @default(10000)
+  updatedAt             DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+/// Something worth the owner's attention, found by the alert rules. At most one per kind, key and day.
+model OwnerAlert {
+  id         String    @id @default(cuid())
+  businessId String
+  branchId   String?
+  /// VOIDS, VOID_AMOUNT, DISCOUNT_BILL, DISCOUNT_SHARE, REFUND, CASH_DIFFERENCE.
+  kind       String
+  /// The business's local day, YYYY-MM-DD.
+  date       String
+  /// Tells two alerts of the same kind on the same day apart (for example which bill). Empty when there is only one.
+  key        String    @default("")
+  title      String
+  detail     String
+  /// "alert" or "warn".
+  level      String    @default("warn")
+  createdAt  DateTime  @default(now())
+  seenAt     DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, kind, date, key])
+  @@index([businessId, createdAt])
+}
+
+/// A run of invoice numbers set aside for one phone to use while it has no connection. Numbers are taken from the business's
+/// single counter when the block is made, so they can never clash with bills made online. A number that is never used is
+/// recorded as a gap (see InvoiceGap), so the series can always be accounted for.
+model OfflineNumberBlock {
+  id         String    @id @default(cuid())
+  businessId String
+  branchId   String
+  /// The phone's own random id (kept in its browser storage).
+  deviceId   String
+  userId     String
+  fromNumber Int
+  toNumber   Int
+  /// OPEN or CLOSED. Closing records every unused number as a gap.
+  status     String    @default("OPEN")
+  createdAt  DateTime  @default(now())
+  closedAt   DateTime?
+  closedById String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([businessId, deviceId])
+}
+
+/// An invoice number that was set aside but never used. If a bill with that number reaches the server later (a phone that was
+/// offline a long time), the gap is removed and the bill takes its place.
+model InvoiceGap {
+  id         String   @id @default(cuid())
+  businessId String
+  number     Int
+  blockId    String?
+  reason     String
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, number])
+}
+
+/// The connection to this business's Customer OS: where its customers and loyalty points live once linked.
+/// The key is stored encrypted (it must be sent, so it cannot be hashed) and is never shown again, only its prefix.
+model CustomerOsLink {
+  businessId String   @id
+  /// Base address of Customer OS, no trailing slash, e.g. https://customers.example.com
+  baseUrl    String
+  keyEnc     String
+  keyPrefix  String
+  enabled    Boolean  @default(true)
+  lastOkAt   DateTime?
+  lastError  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+enum CustomerOsStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// One paid bill waiting to be (or already) recorded in Customer OS. Written in the same transaction as the invoice, so a
+/// bill is never paid without its event, and sent afterwards, so a Customer OS outage never stops billing.
+model CustomerOsEvent {
+  id            String           @id @default(cuid())
+  businessId    String
+  invoiceId     String
+  status        CustomerOsStatus @default(PENDING)
+  attempts      Int              @default(0)
+  nextAttemptAt DateTime         @default(now())
+  lastError     String?
+  /// Points Customer OS gave for this bill, once it answered.
+  pointsEarned  Int?
+  createdAt     DateTime         @default(now())
+  sentAt        DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, invoiceId])
+  @@index([status, nextAttemptAt])
+  @@index([businessId, status])
+}
