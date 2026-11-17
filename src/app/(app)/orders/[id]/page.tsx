@@ -1,6 +1,7 @@
 import { queuePrintAction } from "../../printing/actions";
 import { PrintMenu } from "@/components/print-menu";
 import { CustomerOsPoints } from "@/features/customeros/points";
+import { listBillRewards } from "@/features/customeros/server/reward";
 import { getPrintConfig } from "@/features/printing/server/settings";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
@@ -63,11 +64,14 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
       ? maxRedeemBlocks(loyalty.customer.pointsBalance, base.subtotal - base.discount, loyalty.settings)
       : 0;
   const redeemBlocks = Math.min(maxBlocks, Math.max(0, Math.floor(Number(query.redeem ?? 0)) || 0));
+  // Rewards the customer has in Customer OS (only when it is connected and staff confirmed who the customer is).
+  const billRewards = loyalty?.customer && loyalty.confirmed ? await listBillRewards(ctx, loyalty.customer.id) : { state: "off" as const, rewards: [] };
+  const chosenReward = billRewards.rewards.find((r) => r.id === query.reward) ?? null;
   let totals = base;
   let billError: string | null = null;
-  if (base && redeemBlocks > 0 && loyalty) {
+  if (base && (redeemBlocks > 0 || chosenReward) && loyalty) {
     try {
-      totals = await previewBill(ctx, id, discount, redeemBlocks * loyalty.settings.redeemPoints);
+      totals = await previewBill(ctx, id, discount, redeemBlocks > 0 ? redeemBlocks * loyalty.settings.redeemPoints : 0, chosenReward);
     } catch (e) {
       if (!(e instanceof DomainError)) throw e;
       billError = e.message;
@@ -625,8 +629,28 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                     </select>
                   </label>
                 )}
+                {billRewards.rewards.length > 0 && (
+                  <label className="text-xs font-medium">
+                    Use Customer OS reward
+                    <select
+                      name="reward"
+                      defaultValue={chosenReward?.id ?? ""}
+                      className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">None</option>
+                      {billRewards.rewards.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} (-{formatNpr(r.valueMinor)}, uses {r.cost} pts)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <button className="min-h-9 rounded-lg border border-stone-300 px-3 text-sm">Apply</button>
               </form>
+              {billRewards.state === "unavailable" && (
+                <p className="mb-2 text-xs text-stone-500">Customer OS rewards are unavailable right now.</p>
+              )}
               {billError && (
                 <p role="alert" className="mb-2 rounded-lg bg-red-50 p-2 text-xs text-red-800">
                   {billError}
@@ -650,6 +674,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
               <form className="mt-2 flex items-end gap-2 text-xs" method="get">
                 {discountPct > 0 && <input type="hidden" name="discount" value={discountPct} />}
                 {redeemBlocks > 0 && <input type="hidden" name="redeem" value={redeemBlocks} />}
+                {chosenReward && <input type="hidden" name="reward" value={chosenReward.id} />}
                 <label className="font-medium">
                   Share between
                   <input
@@ -679,6 +704,8 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                   <input type="hidden" name="discountPercent" value={discountPct} />
                   <input type="hidden" name="redeemPoints" value={totals.redeemPoints} />
                   <input type="hidden" name="redeemBlocks" value={redeemBlocks} />
+                  {chosenReward && <input type="hidden" name="rewardId" value={chosenReward.id} />}
+                  {chosenReward && <p className="text-xs text-green-800">{chosenReward.name} uses {chosenReward.cost} Customer OS points when you take payment.</p>}
                   <p className="text-xs text-stone-500">Payments must add up to {formatNpr(totals.grandTotal)}.</p>
                   {(["cash", "qr", "card"] as const).map((m, idx) => (
                     <label key={m} className="flex items-center justify-between text-sm">

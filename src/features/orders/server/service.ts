@@ -8,7 +8,8 @@ import { assertDayOpen } from "@/features/reports/server/day-lock";
 import { deductForInvoice } from "@/features/stock/server/deduct";
 import { applyCampaignBonus } from "@/features/campaigns/server/bonus";
 import { applyCheckoutLoyalty, planEarn, planRedemption, settingsFromBusiness } from "@/features/loyalty/server/checkout";
-import { enqueueIfLinked, flushSoon } from "@/features/customeros/server/outbox";
+import { enqueueIfLinked, flushSoon, recordRedeemed } from "@/features/customeros/server/outbox";
+import { releaseReward, redeemRewardForBill, type UsedReward } from "@/features/customeros/server/reward";
 import { syncOrderStatus } from "./sync";
 import { randomBytes } from "node:crypto";
 import { pushToTeam, pushToUser } from "@/features/notifications/server/push";
@@ -334,10 +335,12 @@ export interface CheckoutInput {
   payments: { method: PaymentMethod; amount: number }[];
   /** Loyalty points to spend on this bill (whole redeem blocks). */
   redeemPoints?: number;
+  /** A Customer OS reward to use as a discount (its id). Used in Customer OS first, given back if the bill cannot be paid. */
+  rewardId?: string;
 }
 
 /** Totals for an order using the business's tax settings, including any loyalty reward being applied. */
-export async function previewBill(ctx: TenantContext, orderId: string, discount: DiscountInput, redeemPoints = 0) {
+export async function previewBill(ctx: TenantContext, orderId: string, discount: DiscountInput, redeemPoints = 0, reward: { valueMinor: number } | null = null) {
   const order = await getOrder(ctx, orderId);
   if (!order) throw new DomainError("Order not found.");
   const business = await db.business.findUniqueOrThrow({ where: { id: ctx.businessId } });
@@ -354,7 +357,7 @@ export async function previewBill(ctx: TenantContext, orderId: string, discount:
         .map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
       {
         discount,
-        loyaltyDiscount: plan.discount,
+        loyaltyDiscount: plan.discount + (reward?.valueMinor ?? 0),
         serviceChargeBps: business.serviceChargeBps,
         vatMode: business.vatMode,
         vatBps: business.vatBps,
@@ -377,7 +380,17 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
   const { businessId, branchId } = scope(ctx);
   let lowStock: { name: string; status: string }[] = [];
   let queuedForCustomerOs = false;
-  const invoice = await db.$transaction(async (tx) => {
+
+  // A Customer OS reward is used there FIRST (it needs the customer's say-so and can fail). If the bill then cannot be paid, it is given back.
+  let used: UsedReward | null = null;
+  if (input.rewardId) {
+    const pre = await db.order.findFirst({ where: { id: orderId, businessId, branchId }, select: { customerId: true, customerConfirmed: true, status: true, invoice: { select: { id: true } } } });
+    if (!pre) throw new DomainError("Order not found.");
+    if (!pre.invoice && !["PAID", "CANCELLED", "MERGED"].includes(pre.status)) {
+      used = await redeemRewardForBill(ctx, { orderId, customerId: pre.customerId, confirmed: pre.customerConfirmed, rewardId: input.rewardId });
+    }
+  }
+  const invoice = await releaseIfNotPaid(used, businessId, orderId, () => db.$transaction(async (tx) => {
     const order = await tx.order.findFirst({
       where: { id: orderId, businessId, branchId },
       include: { items: { include: { addOns: { select: { addOnId: true } } } }, invoice: true },
@@ -403,7 +416,7 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         active.map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
         {
           discount: input.discount,
-          loyaltyDiscount: plan.discount,
+          loyaltyDiscount: plan.discount + (used?.valueMinor ?? 0),
           serviceChargeBps: business.serviceChargeBps,
           vatMode: business.vatMode,
           vatBps: business.vatBps,
@@ -448,7 +461,7 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         deliveryFee: totals.deliveryFee,
         customerId: order.customerId,
         pointsEarned: earned,
-        pointsRedeemed: plan.points,
+        pointsRedeemed: plan.points + (used?.consumed ?? 0),
       },
     });
     await applyCheckoutLoyalty(tx, {
@@ -462,6 +475,8 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
     });
     // If Customer OS is connected, the sale is queued for it in this same transaction (sent after the sale is saved).
     queuedForCustomerOs = await enqueueIfLinked(tx, { businessId, invoiceId: invoice.id, customerId: order.customerId });
+    // The reward already used in Customer OS now belongs to this paid bill, so it can never be given back later.
+    if (used) await recordRedeemed(tx, { businessId, orderId, externalId: used.externalId, consumed: used.consumed });
     // A win-back offer the customer was sent and has now acted on.
     await applyCampaignBonus(tx, { businessId, customerId: order.customerId, invoiceId: invoice.id, userId: ctx.userId });
     // What the kitchen used, from the recipes of everything on the bill (complimentary dishes use stock too).
@@ -508,7 +523,7 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
       total: totals.grandTotal,
     });
     return invoice;
-  });
+  }));
   // After the sale is safely saved: hand it to Customer OS in the background (a failure never touches the sale).
   if (queuedForCustomerOs) flushSoon(businessId);
   // And tell the people who look after stock that something just ran low.
@@ -630,4 +645,14 @@ export async function setDeliveryStatus(
     if (input.status !== "OUT_FOR_DELIVERY") await settleBatchIfDone(tx, businessId, order.batchId);
     await audit(tx, ctx, "order.delivery", "Order", orderId, { from: order.deliveryStatus, to: input.status, rider: rider ?? order.riderName });
   });
+}
+
+/** Runs the payment; if it fails after a Customer OS reward was used for it, the reward's points are given back before the error goes on. */
+async function releaseIfNotPaid<T>(used: UsedReward | null, businessId: string, orderId: string, pay: () => Promise<T>): Promise<T> {
+  try {
+    return await pay();
+  } catch (e) {
+    if (used) await releaseReward(businessId, orderId, used.externalId);
+    throw e;
+  }
 }

@@ -127,8 +127,10 @@ export async function checkoutAction(orderId: string, formData: FormData) {
   if (pct > 0) params.set("discount", String(pct));
   const redeemBlocks = Number(formData.get("redeemBlocks") || 0);
   if (redeemBlocks > 0) params.set("redeem", String(redeemBlocks));
+  const rewardId = String(formData.get("rewardId") || "").slice(0, 100) || undefined;
+  if (rewardId) params.set("reward", rewardId);
   const back = params.size ? `/orders/${orderId}?${params}` : `/orders/${orderId}`;
-  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints }));
+  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints, rewardId }));
   revalidatePath("/orders", "layout");
   redirect(`/orders/${orderId}`);
 }

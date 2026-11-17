@@ -175,7 +175,7 @@ describe("sending paid bills", () => {
       auth: `Bearer ${KEY}`,
       body: { externalId: invoice.id, phone: a.phone, name: "Sita", amountMinor: 85_000, occurredAt: invoice.createdAt.toISOString() },
     });
-    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_invoiceId: { businessId: a.businessId, invoiceId: invoice.id } } });
+    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_kind_refId: { businessId: a.businessId, kind: "PURCHASE", refId: invoice.id } } });
     expect(ev).toMatchObject({ status: "SENT", pointsEarned: 8, attempts: 1, lastError: null });
   });
 
@@ -195,7 +195,7 @@ describe("sending paid bills", () => {
     const down = fakeCos(() => err(503, "Maintenance"));
     const t0 = new Date();
     expect(await flushBusiness(a.businessId, { fetchImpl: down.fetchImpl, now: t0 })).toEqual({ sent: 0, waiting: 1, failed: 0 });
-    let ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_invoiceId: { businessId: a.businessId, invoiceId: invoice.id } } });
+    let ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_kind_refId: { businessId: a.businessId, kind: "PURCHASE", refId: invoice.id } } });
     expect(ev).toMatchObject({ status: "PENDING", attempts: 1, lastError: "Maintenance" });
     expect(ev.nextAttemptAt.getTime()).toBeGreaterThan(t0.getTime());
 
@@ -243,7 +243,7 @@ describe("sending paid bills", () => {
     const { invoice } = await paidBill(a);
     const never = fakeCos(() => err(422, "That phone number is not a valid Nepal mobile number."));
     expect(await flushBusiness(a.businessId, { fetchImpl: never.fetchImpl })).toEqual({ sent: 0, waiting: 0, failed: 1 });
-    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_invoiceId: { businessId: a.businessId, invoiceId: invoice.id } } });
+    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_kind_refId: { businessId: a.businessId, kind: "PURCHASE", refId: invoice.id } } });
     expect(ev.status).toBe("FAILED");
     expect(ev.lastError).toMatch(/phone/);
     await expect(retryFailed(a.manager)).rejects.toThrow(/owner/);
@@ -257,7 +257,7 @@ describe("sending paid bills", () => {
     const cos = fakeCos(() => purchaseOk());
     await flushBusiness(a.businessId, { fetchImpl: cos.fetchImpl });
     expect(cos.calls).toHaveLength(0);
-    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_invoiceId: { businessId: a.businessId, invoiceId: invoice.id } } });
+    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_kind_refId: { businessId: a.businessId, kind: "PURCHASE", refId: invoice.id } } });
     expect(ev).toMatchObject({ status: "SENT", pointsEarned: 0 });
   });
 
@@ -286,7 +286,7 @@ describe("sending paid bills", () => {
     const cos = fakeCos(() => purchaseOk());
     await flushBusiness(a.businessId, { fetchImpl: cos.fetchImpl });
     expect(cos.calls).toHaveLength(0);
-    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_invoiceId: { businessId: b.businessId, invoiceId: invoice.id } } });
+    const ev = await db.customerOsEvent.findUniqueOrThrow({ where: { businessId_kind_refId: { businessId: b.businessId, kind: "PURCHASE", refId: invoice.id } } });
     expect(ev.status).toBe("PENDING");
     await flushBusiness(b.businessId, { fetchImpl: cos.fetchImpl });
     expect(cos.calls).toHaveLength(1);

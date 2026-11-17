@@ -37,9 +37,41 @@ export type CosBalance =
       rewardCost: number | null;
       rewardName: string | null;
       rewardsAvailable: number;
+      rewards: CosReward[];
       totalSpendMinor: number;
       purchaseCount: number;
     };
+
+/** An earned reward waiting to be used. */
+export interface CosReward {
+  customerRewardId: string;
+  name: string;
+  type: "FREE_ITEM" | "DISCOUNT";
+  /** DISCOUNT only: integer paisa off the bill. */
+  valueMinor: number | null;
+  /** Points or stamps it uses up. */
+  requiredBalance: number;
+  redeemable: boolean;
+}
+
+export interface CosRedemption {
+  redemptionId: string;
+  rewardName: string;
+  type: "FREE_ITEM" | "DISCOUNT";
+  valueMinor: number | null;
+  consumed: number;
+  balance: number;
+  deduplicated: boolean;
+}
+
+export interface CosRefundResult {
+  counted: number;
+  pointsReversed: number;
+  pointsShortfall: number;
+  balance: number | null;
+  deduplicated: boolean;
+  fullyRefunded: boolean;
+}
 
 /** `retry: true` means trying the same request later may work (network, server, key problems); false means it never will. */
 export type CosResult<T> = { ok: true; data: T } | { ok: false; retry: boolean; status: number; message: string };
@@ -94,3 +126,9 @@ async function call<T>(
 export const cosPing = (t: CosTarget, o?: { fetchImpl?: FetchLike }) => call<{ business: string }>(t, "GET", "/ping", undefined, { timeoutMs: 8_000, ...o });
 export const cosRecordPurchase = (t: CosTarget, p: CosPurchase, o?: { fetchImpl?: FetchLike }) => call<CosPurchaseResult>(t, "POST", "/purchases", p, o);
 export const cosLookup = (t: CosTarget, phone: string, o?: { fetchImpl?: FetchLike }) => call<CosBalance>(t, "POST", "/customers/lookup", { phone }, { timeoutMs: 4_000, ...o });
+export const cosRedeem = (t: CosTarget, p: { externalId: string; customerRewardId: string; phone: string }, o?: { fetchImpl?: FetchLike }) =>
+  call<CosRedemption>(t, "POST", "/rewards/redeem", p, { timeoutMs: 8_000, ...o });
+export const cosRelease = (t: CosTarget, p: { externalId: string }, o?: { fetchImpl?: FetchLike }) =>
+  call<{ released: true; deduplicated: boolean; balance: number }>(t, "POST", "/rewards/release", p, o);
+export const cosRefund = (t: CosTarget, p: { saleExternalId: string; externalRefundId: string; amountMinor: number }, o?: { fetchImpl?: FetchLike }) =>
+  call<CosRefundResult>(t, "POST", "/refunds", p, o);

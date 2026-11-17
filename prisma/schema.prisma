@@ -1886,24 +1886,40 @@ enum CustomerOsStatus {
   FAILED
 }
 
-/// One paid bill waiting to be (or already) recorded in Customer OS. Written in the same transaction as the invoice, so a
+enum CustomerOsKind {
+  /// A paid bill, recorded as a purchase so Customer OS gives the points.
+  PURCHASE
+  /// A credit note: Customer OS takes back the points in proportion.
+  REFUND
+  /// A reward was used on a bill (kept for the record; it is sent before the bill is paid).
+  REDEEM
+  /// A reward was used but the bill was not paid: give the points back.
+  RELEASE
+}
+
+/// One thing waiting to be (or already) told to Customer OS. Written in the same transaction as the invoice or credit note, so a
 /// bill is never paid without its event, and sent afterwards, so a Customer OS outage never stops billing.
 model CustomerOsEvent {
   id            String           @id @default(cuid())
   businessId    String
+  kind          CustomerOsKind   @default(PURCHASE)
+  /// The invoice this is about (for RELEASE and REDEEM: the order id, there may be no invoice).
   invoiceId     String
+  /// What makes this event unique within its kind: the invoice id (PURCHASE), the credit note id (REFUND), the order id (REDEEM, RELEASE).
+  refId         String
   status        CustomerOsStatus @default(PENDING)
   attempts      Int              @default(0)
   nextAttemptAt DateTime         @default(now())
   lastError     String?
-  /// Points Customer OS gave for this bill, once it answered.
+  /// Points Customer OS gave (PURCHASE) or took back (REFUND), once it answered.
   pointsEarned  Int?
   createdAt     DateTime         @default(now())
   sentAt        DateTime?
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  @@unique([businessId, invoiceId])
+  @@unique([businessId, kind, refId])
   @@index([status, nextAttemptAt])
   @@index([businessId, status])
+  @@index([businessId, invoiceId])
 }

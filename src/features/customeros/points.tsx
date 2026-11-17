@@ -13,6 +13,8 @@ export async function CustomerOsPoints({ ctx, customerId, className = "" }: { ct
   }
   const b = v.balance;
   if (!b.found) return <p className={`text-stone-600 ${className}`}>Customer OS points: 0 (no purchases recorded yet)</p>;
+  // A reward stays on the list after the points behind it were taken back (a refund) but cannot be used until they are earned again.
+  const ready = b.rewards.filter((r) => r.redeemable).length;
   const unit = b.program?.type === "STAMPS" ? "stamp" : "point";
   return (
     <p className={`text-stone-700 ${className}`}>
@@ -22,7 +24,7 @@ export async function CustomerOsPoints({ ctx, customerId, className = "" }: { ct
       </span>{" "}
       in Customer OS
       {b.rewardCost ? ` · reward at ${b.rewardCost}` : ""}
-      {b.rewardsAvailable > 0 ? ` · ${b.rewardsAvailable} reward${b.rewardsAvailable === 1 ? "" : "s"} ready` : ""}
+      {ready > 0 ? ` · ${ready} reward${ready === 1 ? "" : "s"} ready` : ""}
     </p>
   );
 }

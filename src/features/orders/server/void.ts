@@ -6,6 +6,7 @@ import { audit } from "@/server/audit";
 import { scope } from "@/server/branch";
 import { closeTableSittingsInTx } from "@/features/guest/server/service";
 import { assertDayOpen } from "@/features/reports/server/day-lock";
+import { enqueueRefundIfLinked, flushSoon } from "@/features/customeros/server/outbox";
 
 /**
  * Cancel an unpaid order, or refund a paid invoice.
@@ -88,7 +89,8 @@ export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawRe
   const { businessId, branchId } = scope(ctx);
   if (opts.method !== undefined && !["CASH", "QR", "CARD", "CREDIT"].includes(opts.method)) throw new DomainError("Choose how the money is handed back.");
 
-  return db.$transaction(async (tx) => {
+  let queuedForCustomerOs = false;
+  const creditNote = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${invoiceId} AND "businessId" = ${businessId} FOR UPDATE`;
     const invoice = await tx.invoice.findFirst({
       where: { id: invoiceId, businessId, branchId },
@@ -162,6 +164,10 @@ export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawRe
       data: (Object.entries(back) as [Method, number][]).filter(([, a]) => a > 0).map(([method, a]) => ({ businessId, creditNoteId: note.id, method, amount: a })),
     });
 
+    // If Customer OS gave the points for this bill, it takes them back too (sent after this refund is saved).
+    queuedForCustomerOs = await enqueueRefundIfLinked(tx, { businessId, invoiceId: invoice.id, creditNoteId: note.id });
+    const customerOsHoldsPoints = !!(await tx.customerOsLink.findUnique({ where: { businessId }, select: { businessId: true } }));
+
     if (invoice.customerId) {
       const customer = await tx.customer.findFirst({ where: { id: invoice.customerId, businessId } });
       if (customer) {
@@ -170,8 +176,9 @@ export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawRe
         const entries = await tx.loyaltyEntry.findMany({ where: { businessId, invoiceId: invoice.id, kind: "REVERSAL" }, select: { points: true } });
         const takenBack = -entries.filter((e) => e.points < 0).reduce((n, e) => n + e.points, 0);
         const returned = entries.filter((e) => e.points > 0).reduce((n, e) => n + e.points, 0);
-        const earnedNow = finishes ? invoice.pointsEarned - takenBack : Math.round((invoice.pointsEarned * amount) / invoice.grandTotal);
-        const returnNow = finishes ? invoice.pointsRedeemed - returned : Math.round((invoice.pointsRedeemed * amount) / invoice.grandTotal);
+        const earnedNow = customerOsHoldsPoints ? 0 : finishes ? invoice.pointsEarned - takenBack : Math.round((invoice.pointsEarned * amount) / invoice.grandTotal);
+        // While Customer OS holds the points, this app's own balance is not touched (a reward used from Customer OS is not given back by a refund yet).
+        const returnNow = customerOsHoldsPoints ? 0 : finishes ? invoice.pointsRedeemed - returned : Math.round((invoice.pointsRedeemed * amount) / invoice.grandTotal);
         const note2 = `Refund, credit note #${note.number}`;
         await tx.customer.update({
           where: { businessId_id: { businessId, id: customer.id } },
@@ -199,6 +206,9 @@ export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawRe
     });
     return note;
   });
+  // After the refund is saved: tell Customer OS in the background (a failure never touches the refund).
+  if (queuedForCustomerOs) flushSoon(businessId);
+  return creditNote;
 }
 
 const money = (n: number) => `Rs ${(n / 100).toLocaleString("en-US", { minimumFractionDigits: n % 100 ? 2 : 0 })}`;
