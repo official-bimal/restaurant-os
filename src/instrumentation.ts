@@ -15,6 +15,10 @@ export async function register() {
     if (running) return;
     running = true;
     try {
+      // Online orders nobody answered in time expire, so the customer is told instead of waiting for ever.
+      const { expireStaleOnlineOrders } = await import("@/features/online/server/service");
+      const expired = await expireStaleOnlineOrders();
+      if (expired) console.log(`[online] ${expired} unanswered online order${expired === 1 ? "" : "s"} expired`);
       // Paid bills still waiting to reach Customer OS (it was down, or there was no internet): try again.
       const { flushAll } = await import("@/features/customeros/server/outbox");
       const sentToCustomerOs = await flushAll();

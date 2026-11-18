@@ -60,6 +60,15 @@ export async function enqueueRelease(businessId: string, orderId: string, extern
   });
 }
 
+/**
+ * The owner refunded a whole bill and chose to give the reward used on it back. Returns false if it was already given back.
+ * (A reward that ended up on a paid bill is otherwise never released: see perform.)
+ */
+export async function enqueueReturnReward(tx: Tx, p: { businessId: string; invoiceId: string; externalId: string }): Promise<boolean> {
+  const made = await tx.customerOsEvent.createMany({ data: [{ businessId: p.businessId, kind: "RETURN", invoiceId: p.invoiceId, refId: p.externalId }], skipDuplicates: true });
+  return made.count > 0;
+}
+
 const backoffMs = (attempts: number) => Math.min(2 ** Math.min(attempts, 10), 60) * 60_000;
 
 export interface FlushReport {
@@ -72,6 +81,11 @@ type Outcome = { done: true; points: number | null; note?: string } | { done: fa
 
 /** What one event asks of Customer OS. Pure reads here; the caller records the outcome. */
 async function perform(ev: { kind: string; invoiceId: string; refId: string }, businessId: string, target: CosTarget, fetchImpl?: FetchLike): Promise<Outcome> {
+  if (ev.kind === "RETURN") {
+    // Giving back is the same call as releasing; the difference is that the owner asked for it on a paid, refunded bill.
+    const r = await cosRelease(target, { externalId: ev.refId }, { fetchImpl });
+    return r.ok ? { done: true, points: null, note: r.data.deduplicated ? "Reward was already given back." : "Reward given back." } : { done: false, wait: false, failure: r };
+  }
   if (ev.kind === "RELEASE") {
     // A reward that ended up on a paid bill stays used. The bill's own transaction recorded that.
     const used = await db.customerOsEvent.findUnique({ where: { businessId_kind_refId: { businessId, kind: "REDEEM", refId: ev.refId } }, select: { id: true } });

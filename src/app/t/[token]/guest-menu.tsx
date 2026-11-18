@@ -44,7 +44,15 @@ interface CartLine {
 }
 const lineKey = (itemId: string, addOnIds: string[]) => `${itemId}|${[...addOnIds].sort().join(",")}`;
 
-export function GuestMenu({ token, categories }: { token: string; categories: MenuCategory[] }) {
+/** What the page that wraps the menu (online ordering) is given to take the order: the cart, and a way to empty it. */
+export interface CheckoutApi {
+  lines: { menuItemId: string; quantity: number; addOnIds: string[] }[];
+  total: number;
+  count: number;
+  reset: () => void;
+}
+
+export function GuestMenu({ token, categories, checkout }: { token: string; categories: MenuCategory[]; checkout?: (api: CheckoutApi) => React.ReactNode }) {
   const router = useRouter();
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [note, setNote] = useState("");
@@ -55,6 +63,7 @@ export function GuestMenu({ token, categories }: { token: string; categories: Me
   const [picking, setPicking] = useState<string | null>(null);
   const [picks, setPicks] = useState<Record<string, string[]>>({});
   const [pickError, setPickError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<string>("all");
   // Language chosen with the switch at the top of the page (shared with every other part of the guest page).
@@ -341,6 +350,47 @@ export function GuestMenu({ token, categories }: { token: string; categories: Me
         </div>
       )}
 
+      {reviewing && checkout && (
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-black/70" onClick={() => setReviewing(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Your order" className="mx-auto min-h-full max-w-lg bg-white p-4 pb-10 sm:my-6 sm:min-h-0 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Your order</h2>
+              <button onClick={() => setReviewing(false)} aria-label={t("close")} className="h-10 w-10 rounded-full bg-white/10 text-xl">
+                ×
+              </button>
+            </div>
+            <ul className="mb-3 divide-y divide-stone-100">
+              {lines.map((l) => {
+                const names = l.item.groups.flatMap((g) => g.choices).filter((c) => l.line.addOnIds.includes(c.id)).map((c) => c.name);
+                return (
+                  <li key={l.k} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <span className="flex-1">
+                      {dish(l.item)}
+                      {names.length > 0 && <span className="block text-xs text-stone-500">{names.join(", ")}</span>}
+                    </span>
+                    <span className="w-28">{stepper(l.item.name, l.line.quantity, (d) => change(l.item.id, l.line.addOnIds, d))}</span>
+                    <span className="w-20 text-right">{formatNpr(priceOf(l.item, l.line.addOnIds) * l.line.quantity)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {count === 0 ? (
+              <p className="py-6 text-center text-stone-500">Your cart is empty.</p>
+            ) : (
+              checkout({
+                lines: lines.map((l) => ({ menuItemId: l.item.id, quantity: l.line.quantity, addOnIds: l.line.addOnIds })),
+                total,
+                count,
+                reset: () => {
+                  setCart({});
+                  setReviewing(false);
+                },
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {(count > 0 || error || sent) && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-stone-200 bg-white p-3 shadow-lg">
           <div className="mx-auto max-w-lg space-y-2">
@@ -354,7 +404,15 @@ export function GuestMenu({ token, categories }: { token: string; categories: Me
                 {t("orderSent")}
               </p>
             )}
-            {count > 0 && (
+            {count > 0 && checkout && (
+              <button
+                onClick={() => setReviewing(true)}
+                className="min-h-12 w-full rounded-full bg-brand-600 px-4 text-lg font-semibold text-white hover:bg-brand-700"
+              >
+                {t("reviewOrder", { count: count === 1 ? t("itemOne") : t("itemMany", { n: count }), total: formatNpr(total) })}
+              </button>
+            )}
+            {count > 0 && !checkout && (
               <>
                 <input
                   value={note}

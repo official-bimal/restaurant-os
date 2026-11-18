@@ -73,6 +73,7 @@ export const STRINGS = {
   close: { en: "Close", ne: "बन्द गर्नुहोस्" },
   notePlaceholder: { en: "Anything we should know? (optional)", ne: "हामीले जान्नुपर्ने केही छ? (ऐच्छिक)" },
   placeOrder: { en: "Place order · {count} · {total}", ne: "अर्डर गर्नुहोस् · {count} · {total}" },
+  reviewOrder: { en: "View order · {count} · {total}", ne: "अर्डर हेर्नुहोस् · {count} · {total}" },
   itemOne: { en: "1 item", ne: "१ परिकार" },
   itemMany: { en: "{n} items", ne: "{n} परिकार" },
   sending: { en: "Sending…", ne: "पठाउँदै…" },

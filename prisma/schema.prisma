@@ -216,6 +216,7 @@ model Business {
   invoiceGaps      InvoiceGap[]
   customerOsLink   CustomerOsLink?
   customerOsEvents CustomerOsEvent[]
+  onlineOrders     OnlineOrder[]
   dayCloses        DayClose[]
   feedback         Feedback[]
   stockItems       StockItem[]
@@ -1104,6 +1105,19 @@ model Branch {
   longitude         Float?
   /// How close (metres) staff must be to the branch's location to clock in, when clocking by location is required.
   clockRadiusMeters Int                  @default(150)
+  /// Online ordering: customers order takeaway or delivery from a public page, paying at pickup or at the door.
+  onlineEnabled     Boolean              @default(false)
+  /// The secret part of the public link (/o/<token>). Null until online ordering is first switched on.
+  onlineToken       String?              @unique
+  onlinePickup      Boolean              @default(true)
+  onlineDelivery    Boolean              @default(true)
+  /// Smallest food total (paisa, before tax and charges) the branch will take online. 0 = no minimum.
+  onlineMinOrder    Int                  @default(0)
+  /// What customers are told to expect, in minutes.
+  onlinePrepMinutes Int                  @default(20)
+  /// A line shown at the top of the page ("Closed on Tuesdays", "Delivery until 8pm").
+  onlineNotice      String?
+  onlineOrders      OnlineOrder[]
 
   @@unique([businessId, id])
   @@unique([businessId, name])
@@ -1866,16 +1880,16 @@ model InvoiceGap {
 /// The connection to this business's Customer OS: where its customers and loyalty points live once linked.
 /// The key is stored encrypted (it must be sent, so it cannot be hashed) and is never shown again, only its prefix.
 model CustomerOsLink {
-  businessId String   @id
+  businessId String    @id
   /// Base address of Customer OS, no trailing slash, e.g. https://customers.example.com
   baseUrl    String
   keyEnc     String
   keyPrefix  String
-  enabled    Boolean  @default(true)
+  enabled    Boolean   @default(true)
   lastOkAt   DateTime?
   lastError  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
@@ -1895,6 +1909,8 @@ enum CustomerOsKind {
   REDEEM
   /// A reward was used but the bill was not paid: give the points back.
   RELEASE
+  /// The owner refunded a whole bill and chose to give the reward used on it back to the customer.
+  RETURN
 }
 
 /// One thing waiting to be (or already) told to Customer OS. Written in the same transaction as the invoice or credit note, so a
@@ -1922,4 +1938,78 @@ model CustomerOsEvent {
   @@index([status, nextAttemptAt])
   @@index([businessId, status])
   @@index([businessId, invoiceId])
+}
+
+enum OnlineOrderStatus {
+  /// Waiting for the restaurant to accept.
+  PENDING
+  /// Accepted: it is now a normal order (orderId).
+  ACCEPTED
+  REJECTED
+  /// The customer cancelled before the restaurant answered.
+  CANCELLED
+  /// Nobody answered in time.
+  EXPIRED
+}
+
+/// An order a customer sent from the public page. It is only a request until staff accept it; accepting turns it into a real Order
+/// (takeaway or delivery) in one transaction. Prices and the delivery fee are worked out here, never taken from the customer's phone.
+model OnlineOrder {
+  id               String            @id @default(cuid())
+  businessId       String
+  branchId         String
+  status           OnlineOrderStatus @default(PENDING)
+  /// TAKEAWAY or DELIVERY.
+  type             OrderType
+  customerName     String
+  /// E.164.
+  customerPhone    String
+  note             String?
+  /// Food total in paisa (before service charge and VAT), as quoted when the order was sent.
+  subtotal         Int
+  /// Delivery only.
+  address          String?
+  location         String?
+  destLat          Float?
+  destLng          Float?
+  deliveryFee      Int               @default(0)
+  deliveryZoneId   String?
+  deliveryZoneName String?
+  deliveryMeters   Int?
+  /// Makes a double tap, or a retry after a bad connection, create one request.
+  idempotencyKey   String
+  /// The customer's status page: /o/<branch token>/status/<this>. A long random secret.
+  trackingToken    String            @unique
+  rejectReason     String?
+  orderId          String?
+  createdAt        DateTime          @default(now())
+  decidedAt        DateTime?
+  decidedById      String?
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch            @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  items    OnlineOrderItem[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, branchId, status])
+  @@index([businessId, customerPhone, status])
+}
+
+model OnlineOrderItem {
+  id            String   @id @default(cuid())
+  businessId    String
+  onlineOrderId String
+  menuItemId    String
+  /// Name and price as the customer saw them.
+  name          String
+  unitPrice     Int
+  quantity      Int
+  note          String?
+  /// Choices picked on the dish (checked again when staff accept).
+  addOnIds      String[] @default([])
+
+  onlineOrder OnlineOrder @relation(fields: [businessId, onlineOrderId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, onlineOrderId])
 }

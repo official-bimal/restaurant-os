@@ -15,12 +15,11 @@ import { randomBytes } from "node:crypto";
 import { pushToTeam, pushToUser } from "@/features/notifications/server/push";
 import { finishData } from "@/features/delivery/server/service";
 import { settleBatchIfDone } from "@/features/delivery/server/batch-state";
-import { distanceBetween, parseLocation, type Point } from "@/features/delivery/geo";
-import { geocodeAddress, phoneKey } from "@/features/delivery/geocode";
 import { orderableItemIds } from "@/features/menu/server/menu-sets";
 import { branchMenuOverrides, effectiveItem, hiddenCategoryIds } from "@/features/menu/server/branch-menu";
 import { priceAddOns } from "@/features/menu/server/pricing";
-import { canMoveDelivery, cleanDelivery, feeForDistance, formatKm, kmToMeters, type DeliveryInput } from "./delivery";
+import { canMoveDelivery, cleanDelivery, type DeliveryInput } from "./delivery";
+import { locateDestination, quoteDeliveryFee, rememberPlace } from "@/features/delivery/server/fee";
 import type { TenantContext } from "@/server/auth";
 import { can, type Permission } from "@/server/permissions";
 import { Prisma } from "@/generated/prisma/client";
@@ -117,28 +116,7 @@ export async function createOrder(
 
   // A location (coordinates or a map link) gives the distance automatically and a point for the map.
   // Done before the transaction because a routing server, if one is set up, is a network call.
-  let located: { dest: Point; meters: number | null } | null = null;
-  // Where the address is, in order of trust: what staff typed or pasted, then a place remembered for this phone number,
-  // then (only if a geocoding server is set up) a lookup of the address text.
-  let dest: Point | null = null;
-  if (delivery && input.delivery?.location?.trim()) {
-    dest = parseLocation(input.delivery.location);
-    if (!dest) throw new DomainError("Could not read that location. Paste coordinates like 27.7172, 85.324 or a link from a map app.");
-  } else if (delivery) {
-    const key = phoneKey(delivery.phone);
-    const saved = key ? await db.deliveryPlace.findUnique({ where: { businessId_phoneKey: { businessId, phoneKey: key } } }) : null;
-    // Only reuse it when the address is the one that was saved (same words), so a customer who moved is not sent to the old place.
-    if (saved && saved.address.toLowerCase() === delivery.address.toLowerCase()) dest = { lat: saved.lat, lng: saved.lng };
-    else dest = await geocodeAddress(delivery.address);
-  }
-  if (delivery && dest) {
-    const [branch, business] = await Promise.all([
-      db.branch.findUnique({ where: { businessId_id: { businessId, id: branchId } }, select: { latitude: true, longitude: true } }),
-      db.business.findUniqueOrThrow({ where: { id: businessId }, select: { roadFactorPct: true } }),
-    ]);
-    const from = branch?.latitude != null && branch.longitude != null ? { lat: branch.latitude, lng: branch.longitude } : null;
-    located = { dest, meters: from ? (await distanceBetween(from, dest, business.roadFactorPct)).meters : null };
-  }
+  const located = delivery ? await locateDestination({ businessId, branchId, address: delivery.address, phone: delivery.phone, location: input.delivery?.location }) : null;
 
   try {
     const created = await db.$transaction(async (tx) => {
@@ -155,26 +133,7 @@ export async function createOrder(
         });
       }
       // Delivery fee: by distance when the branch has distance bands, else by the zone chosen, else free.
-      let zone: { name: string; fee: number; meters?: number } | null = null;
-      if (delivery) {
-        const bands = await tx.deliveryBand.findMany({ where: { businessId, branchId, active: true } });
-        if (bands.length > 0) {
-          // Automatic from the location when there is one (and the branch has coordinates), else the distance staff typed.
-          const meters = located?.meters ?? kmToMeters(input.delivery?.distanceKm);
-          const hit = feeForDistance(bands, meters);
-          if (!hit) {
-            const max = Math.max(...bands.map((b) => b.upToMeters));
-            throw new DomainError(`That address is outside the delivery range (up to ${formatKm(max)}).`);
-          }
-          zone = { name: `Up to ${formatKm(hit.upToMeters)}`, fee: hit.fee, meters };
-        }
-        const zones = bands.length > 0 ? [] : await tx.deliveryZone.findMany({ where: { businessId, branchId, active: true } });
-        if (zones.length > 0) {
-          const picked = zones.find((z) => z.id === input.delivery?.zoneId);
-          if (!picked) throw new DomainError("Choose the delivery area.");
-          zone = { name: picked.name, fee: picked.fee };
-        }
-      }
+      const zone = delivery ? await quoteDeliveryFee(tx, { businessId, branchId, located, distanceKm: input.delivery?.distanceKm, zoneId: input.delivery?.zoneId }) : null;
       const { orderCounter } = await tx.business.update({
         where: { id: businessId },
         data: { orderCounter: { increment: 1 } },
@@ -210,18 +169,7 @@ export async function createOrder(
       return order;
     });
     // Remember where this customer was delivered to, so the next order to the same address needs no lookup.
-    if (delivery && located) {
-      const key = phoneKey(delivery.phone);
-      if (key) {
-        void db.deliveryPlace
-          .upsert({
-            where: { businessId_phoneKey: { businessId, phoneKey: key } },
-            create: { businessId, phoneKey: key, address: delivery.address, lat: located.dest.lat, lng: located.dest.lng },
-            update: { address: delivery.address, lat: located.dest.lat, lng: located.dest.lng },
-          })
-          .catch(() => {});
-      }
-    }
+    if (delivery) rememberPlace({ businessId, phone: delivery.phone, address: delivery.address, located });
     return created;
   } catch (e) {
     // Two identical requests raced: the loser finds the winner's order.
@@ -335,8 +283,10 @@ export interface CheckoutInput {
   payments: { method: PaymentMethod; amount: number }[];
   /** Loyalty points to spend on this bill (whole redeem blocks). */
   redeemPoints?: number;
-  /** A Customer OS reward to use as a discount (its id). Used in Customer OS first, given back if the bill cannot be paid. */
+  /** A Customer OS reward to use on this bill (its id). Used in Customer OS first, given back if the bill cannot be paid. */
   rewardId?: string;
+  /** For a free-item reward: which item on the order is free (one unit of it comes off the bill). */
+  freeItemId?: string;
 }
 
 /** Totals for an order using the business's tax settings, including any loyalty reward being applied. */
@@ -387,7 +337,7 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
     const pre = await db.order.findFirst({ where: { id: orderId, businessId, branchId }, select: { customerId: true, customerConfirmed: true, status: true, invoice: { select: { id: true } } } });
     if (!pre) throw new DomainError("Order not found.");
     if (!pre.invoice && !["PAID", "CANCELLED", "MERGED"].includes(pre.status)) {
-      used = await redeemRewardForBill(ctx, { orderId, customerId: pre.customerId, confirmed: pre.customerConfirmed, rewardId: input.rewardId });
+      used = await redeemRewardForBill(ctx, { orderId, customerId: pre.customerId, confirmed: pre.customerConfirmed, rewardId: input.rewardId, freeItemId: input.freeItemId });
     }
   }
   const invoice = await releaseIfNotPaid(used, businessId, orderId, () => db.$transaction(async (tx) => {
@@ -521,6 +471,7 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
     await audit(tx, ctx, "bill.checkout", "Invoice", invoice.id, {
       number: invoice.number,
       total: totals.grandTotal,
+      ...(used ? { reward: used.name, rewardValue: used.valueMinor, ...(used.itemName ? { freeItem: used.itemName } : {}) } : {}),
     });
     return invoice;
   }));

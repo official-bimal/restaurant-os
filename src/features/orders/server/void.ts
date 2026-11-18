@@ -6,7 +6,7 @@ import { audit } from "@/server/audit";
 import { scope } from "@/server/branch";
 import { closeTableSittingsInTx } from "@/features/guest/server/service";
 import { assertDayOpen } from "@/features/reports/server/day-lock";
-import { enqueueRefundIfLinked, flushSoon } from "@/features/customeros/server/outbox";
+import { enqueueRefundIfLinked, enqueueReturnReward, flushSoon } from "@/features/customeros/server/outbox";
 
 /**
  * Cancel an unpaid order, or refund a paid invoice.
@@ -83,7 +83,7 @@ type Part = "subtotal" | "discount" | "loyaltyDiscount" | "serviceCharge" | "vat
  * was paid by enough of that method. The customer's points are put back in the same proportion. Food already made is not
  * put back in stock. Checked and written under a lock on the invoice, so two refunds at once cannot overshoot.
  */
-export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawReason: string, opts: { amount?: number; method?: string } = {}) {
+export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawReason: string, opts: { amount?: number; method?: string; returnReward?: boolean } = {}) {
   if (!can(ctx.role, "bill.refund")) throw new DomainError("You do not have permission to refund bills.");
   const reason = cleanReason(rawReason);
   const { businessId, branchId } = scope(ctx);
@@ -166,6 +166,14 @@ export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawRe
 
     // If Customer OS gave the points for this bill, it takes them back too (sent after this refund is saved).
     queuedForCustomerOs = await enqueueRefundIfLinked(tx, { businessId, invoiceId: invoice.id, creditNoteId: note.id });
+    // The owner may also give back the reward that was used on this bill, but only when the whole bill ends up refunded.
+    if (opts.returnReward) {
+      if (!finishes) throw new DomainError("A reward can only be given back when the whole bill is refunded. Do it with the refund that finishes it.");
+      const used = await tx.customerOsEvent.findFirst({ where: { businessId, kind: "REDEEM", invoiceId: invoice.orderId }, select: { refId: true } });
+      if (!used) throw new DomainError("No Customer OS reward was used on this bill.");
+      if (!(await enqueueReturnReward(tx, { businessId, invoiceId: invoice.id, externalId: used.refId }))) throw new DomainError("The reward on this bill was already given back.");
+      queuedForCustomerOs = true;
+    }
     const customerOsHoldsPoints = !!(await tx.customerOsLink.findUnique({ where: { businessId }, select: { businessId: true } }));
 
     if (invoice.customerId) {

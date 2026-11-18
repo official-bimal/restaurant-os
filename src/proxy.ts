@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // Online ordering (/o/<token>) is public the same way: the long random token in the URL is the credential.
   // Public guest pages: the secret table token in the URL is the credential, not a staff login.
   // Delivery links work the same way: the long random token in the URL is the credential.
   // Dish photos are public: they are shown on the guest menu.
@@ -15,7 +16,7 @@ export function proxy(request: NextRequest) {
   // The public landing page.
   if (pathname === "/") return NextResponse.next();
   if (installFiles.includes(pathname) || pathname.startsWith("/api/cron/")) return NextResponse.next();
-  if (pathname.startsWith("/login") || pathname.startsWith("/t/") || pathname.startsWith("/track/") || pathname.startsWith("/rider/") || pathname.startsWith("/dish/")) {
+  if (pathname.startsWith("/login") || pathname.startsWith("/t/") || pathname.startsWith("/o/") || pathname.startsWith("/track/") || pathname.startsWith("/rider/") || pathname.startsWith("/dish/")) {
     return NextResponse.next();
   }
   if (!request.cookies.has("ros_session")) {

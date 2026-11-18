@@ -1,7 +1,7 @@
 import { queuePrintAction } from "../../printing/actions";
 import { PrintMenu } from "@/components/print-menu";
 import { CustomerOsPoints } from "@/features/customeros/points";
-import { listBillRewards } from "@/features/customeros/server/reward";
+import { listBillRewards, rewardUsedOnBill } from "@/features/customeros/server/reward";
 import { getPrintConfig } from "@/features/printing/server/settings";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
@@ -49,6 +49,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   const order = await getOrder(ctx, id);
   if (!order) notFound();
 
+  const usedReward = order.invoice && can(ctx.role, "bill.refund") ? await rewardUsedOnBill(ctx.businessId, order.id) : null;
   const closed = order.status === "PAID" || order.status === "CANCELLED" || order.status === "MERGED";
   const discountPct = Math.min(100, Math.max(0, Number(query.discount ?? 0) || 0));
   const discount: DiscountInput =
@@ -67,11 +68,15 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   // Rewards the customer has in Customer OS (only when it is connected and staff confirmed who the customer is).
   const billRewards = loyalty?.customer && loyalty.confirmed ? await listBillRewards(ctx, loyalty.customer.id) : { state: "off" as const, rewards: [] };
   const chosenReward = billRewards.rewards.find((r) => r.id === query.reward) ?? null;
+  // A free-item reward needs one item on the bill to be the free one (the first live item unless the cashier picks another).
+  const liveItems = order.items.filter((i) => i.status !== "CANCELLED" && !i.complimentary && i.unitPrice > 0);
+  const freeItem = chosenReward?.type === "FREE_ITEM" ? (liveItems.find((i) => i.id === query.free) ?? liveItems[0] ?? null) : null;
+  const rewardValue = chosenReward ? (chosenReward.type === "FREE_ITEM" ? (freeItem?.unitPrice ?? 0) : (chosenReward.valueMinor ?? 0)) : 0;
   let totals = base;
   let billError: string | null = null;
   if (base && (redeemBlocks > 0 || chosenReward) && loyalty) {
     try {
-      totals = await previewBill(ctx, id, discount, redeemBlocks > 0 ? redeemBlocks * loyalty.settings.redeemPoints : 0, chosenReward);
+      totals = await previewBill(ctx, id, discount, redeemBlocks > 0 ? redeemBlocks * loyalty.settings.redeemPoints : 0, chosenReward ? { valueMinor: rewardValue } : null);
     } catch (e) {
       if (!(e instanceof DomainError)) throw e;
       billError = e.message;
@@ -587,6 +592,16 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                         </select>
                       </label>
                     </div>
+                    {usedReward && !usedReward.returned && (
+                      <label className="flex items-start gap-2 font-medium">
+                        <input type="checkbox" name="returnReward" className="mt-1 h-4 w-4" />
+                        <span>
+                          Give back the Customer OS reward used on this bill
+                          <span className="block text-xs font-normal text-stone-500">Only with the refund that finishes the whole bill. The customer gets the points back.</span>
+                        </span>
+                      </label>
+                    )}
+                    {usedReward?.returned && <p className="text-xs text-stone-500">The reward used on this bill has already been given back.</p>}
                     <label className="block font-medium">
                       Reason
                       <input name="reason" required minLength={3} maxLength={200} className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2" />
@@ -640,7 +655,19 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                       <option value="">None</option>
                       {billRewards.rewards.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name} (-{formatNpr(r.valueMinor)}, uses {r.cost} pts)
+                          {r.name} ({r.type === "FREE_ITEM" ? "a free item" : `-${formatNpr(r.valueMinor ?? 0)}`}, uses {r.cost} pts)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {chosenReward?.type === "FREE_ITEM" && (
+                  <label className="text-xs font-medium">
+                    Free item
+                    <select name="free" defaultValue={freeItem?.id ?? ""} className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                      {liveItems.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name} ({formatNpr(i.unitPrice)})
                         </option>
                       ))}
                     </select>
@@ -675,6 +702,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                 {discountPct > 0 && <input type="hidden" name="discount" value={discountPct} />}
                 {redeemBlocks > 0 && <input type="hidden" name="redeem" value={redeemBlocks} />}
                 {chosenReward && <input type="hidden" name="reward" value={chosenReward.id} />}
+                {freeItem && <input type="hidden" name="free" value={freeItem.id} />}
                 <label className="font-medium">
                   Share between
                   <input
@@ -705,6 +733,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                   <input type="hidden" name="redeemPoints" value={totals.redeemPoints} />
                   <input type="hidden" name="redeemBlocks" value={redeemBlocks} />
                   {chosenReward && <input type="hidden" name="rewardId" value={chosenReward.id} />}
+                  {freeItem && <input type="hidden" name="freeItemId" value={freeItem.id} />}
                   {chosenReward && <p className="text-xs text-green-800">{chosenReward.name} uses {chosenReward.cost} Customer OS points when you take payment.</p>}
                   <p className="text-xs text-stone-500">Payments must add up to {formatNpr(totals.grandTotal)}.</p>
                   {(["cash", "qr", "card"] as const).map((m, idx) => (

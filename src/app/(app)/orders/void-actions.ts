@@ -24,7 +24,7 @@ export async function refundInvoiceAction(orderId: string, invoiceId: string, fo
   const amount = raw ? Math.round(Number(raw) * 100) : undefined;
   if (amount !== undefined && !Number.isFinite(amount)) redirect(`/orders/${orderId}?error=${encodeURIComponent("Enter the amount as a number.")}`);
   const method = String(formData.get("method") ?? "") || undefined;
-  await guarded(`/orders/${orderId}`, () => refundInvoice(ctx, invoiceId, reason, { amount, method }));
+  await guarded(`/orders/${orderId}`, () => refundInvoice(ctx, invoiceId, reason, { amount, method, returnReward: formData.get("returnReward") === "on" }));
   revalidatePath("/orders", "layout");
   revalidatePath("/bills");
   redirect(`/orders/${orderId}`);

@@ -6,6 +6,7 @@ import { requireTenant } from "@/server/auth";
 import { logout } from "@/app/login/actions";
 import { can } from "@/server/permissions";
 import { inboxCount } from "@/features/guest/server/service";
+import { onlineInboxCount } from "@/features/online/server/service";
 import { unresolvedCount } from "@/features/feedback/server/service";
 import { lowStockCount } from "@/features/stock/server/service";
 import { listMyBranches } from "@/features/branches/server/service";
@@ -43,7 +44,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const ctx = await requireTenant();
   // A rider has their own page and sees nothing else.
   if (ctx.role === "RIDER") redirect("/deliveries");
-  const [business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts] = await Promise.all([
+  const [business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting] = await Promise.all([
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId } }),
     db.user.findUniqueOrThrow({ where: { id: ctx.userId }, select: { name: true } }),
     inboxCount(ctx),
@@ -53,6 +54,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     listNotifications(ctx),
     myClock(ctx),
     unseenAlertCount(ctx),
+    onlineInboxCount(ctx),
   ]);
 
   // The badge and the chime follow what this person has not read yet.
@@ -66,6 +68,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         { href: "/dashboard", label: "Dashboard", icon: "dashboard", tone: "teal" as const },
         { href: "/notifications", label: "Notifications", icon: "bell", tone: "rose" as const, badge: unreadNotifications.length, badgeTone: "alert" as const },
         { href: "/orders", label: "Orders", icon: "orders", tone: "blue" as const, badge: waiting },
+        ...(can(ctx.role, "order.edit") ? [{ href: "/online", label: "Online orders", icon: "orders", tone: "teal" as const, badge: onlineWaiting, badgeTone: "alert" as const }] : []),
         ...(can(ctx.role, "order.create") && can(ctx.role, "order.edit") ? [{ href: "/quick", label: "Quick order", icon: "orders", tone: "teal" as const }] : []),
         { href: "/kitchen", label: "Kitchen", icon: "kitchen", tone: "orange" as const },
         ...(can(ctx.role, "order.edit") ? [{ href: "/dispatch", label: "Dispatch", icon: "truck", tone: "blue" as const }] : []),

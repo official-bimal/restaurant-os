@@ -19,8 +19,10 @@ export interface BillReward {
   /** Customer OS's id for the earned reward. */
   id: string;
   name: string;
-  /** Paisa off the bill. */
-  valueMinor: number;
+  /** A discount takes `valueMinor` off the bill; a free item takes off the price of the one item the cashier picks. */
+  type: "DISCOUNT" | "FREE_ITEM";
+  /** Paisa off the bill (DISCOUNT only; null for a free item, whose value is the chosen item's price). */
+  valueMinor: number | null;
   /** Points or stamps it uses up. */
   cost: number;
 }
@@ -33,21 +35,24 @@ export async function listBillRewards(ctx: TenantContext, customerId: string): P
   return { state: "ok", rewards: v.balance.rewards.filter(usable).map(toBillReward) };
 }
 
-const usable = (r: CosReward) => r.type === "DISCOUNT" && (r.valueMinor ?? 0) > 0 && r.redeemable;
-const toBillReward = (r: CosReward): BillReward => ({ id: r.customerRewardId, name: r.name, valueMinor: r.valueMinor ?? 0, cost: r.requiredBalance });
+const usable = (r: CosReward) => r.redeemable && (r.type === "FREE_ITEM" || (r.valueMinor ?? 0) > 0);
+const toBillReward = (r: CosReward): BillReward => ({ id: r.customerRewardId, name: r.name, type: r.type, valueMinor: r.type === "DISCOUNT" ? (r.valueMinor ?? 0) : null, cost: r.requiredBalance });
 
 export interface UsedReward {
   /** The id of this use, kept on the bill so it can never be released afterwards. */
   externalId: string;
   name: string;
+  /** Paisa taken off the bill: the discount, or the price of the free item. */
   valueMinor: number;
+  /** The free item's name (free-item rewards only). */
+  itemName?: string;
   consumed: number;
 }
 
 /** Uses the reward in Customer OS for this bill. Throws a DomainError (nothing changed) if it cannot. */
 export async function redeemRewardForBill(
   ctx: TenantContext,
-  p: { orderId: string; customerId: string | null; confirmed: boolean; rewardId: string },
+  p: { orderId: string; customerId: string | null; confirmed: boolean; rewardId: string; freeItemId?: string },
   opts: { fetchImpl?: FetchLike } = {},
 ): Promise<UsedReward> {
   if (!p.customerId) throw new DomainError("Add a customer to the order to use a reward.");
@@ -61,7 +66,19 @@ export async function redeemRewardForBill(
   if (view.state !== "ok") throw new DomainError("Customer OS cannot be reached right now. Take payment without the reward, or try again in a moment.");
   const reward = view.balance.found ? view.balance.rewards.find((r) => r.customerRewardId === p.rewardId) : undefined;
   if (!reward) throw new DomainError("That reward is no longer available for this customer.");
-  if (!usable(reward)) throw new DomainError("That reward cannot be used as a discount.");
+  if (!usable(reward)) throw new DomainError("That reward cannot be used on a bill.");
+
+  // What the reward is worth on THIS bill. A discount is worth what Customer OS says; a free item is worth the price of one unit of the
+  // item the cashier picked, which must be a real, live item on this order (the price comes from here, never from the page).
+  let valueMinor = reward.valueMinor ?? 0;
+  let itemName: string | undefined;
+  if (reward.type === "FREE_ITEM") {
+    if (!p.freeItemId) throw new DomainError("Choose which item is free.");
+    const item = await db.orderItem.findFirst({ where: { id: p.freeItemId, orderId: p.orderId, businessId: ctx.businessId }, select: { name: true, unitPrice: true, status: true, complimentary: true } });
+    if (!item || item.status === "CANCELLED" || item.complimentary || item.unitPrice <= 0) throw new DomainError("That item cannot be made free.");
+    valueMinor = item.unitPrice;
+    itemName = item.name;
+  }
 
   const externalId = `${p.orderId}:${randomUUID().slice(0, 8)}`;
   const res = await cosRedeem(loaded.target, { externalId, customerRewardId: p.rewardId, phone: customer.phone }, { fetchImpl: opts.fetchImpl });
@@ -71,11 +88,19 @@ export async function redeemRewardForBill(
     throw new DomainError(res.retry ? "Customer OS could not be reached to use the reward. Take payment without it, or try again." : res.message);
   }
   forgetBalance(ctx.businessId, customer.phone);
-  if (res.data.valueMinor !== reward.valueMinor || res.data.type !== "DISCOUNT") {
+  if (res.data.type !== reward.type || (reward.type === "DISCOUNT" && res.data.valueMinor !== reward.valueMinor)) {
     await releaseReward(ctx.businessId, p.orderId, externalId, opts);
     throw new DomainError("The reward changed while it was being used. Please try again.");
   }
-  return { externalId, name: res.data.rewardName, valueMinor: res.data.valueMinor ?? 0, consumed: res.data.consumed };
+  return { externalId, name: res.data.rewardName, valueMinor, itemName, consumed: res.data.consumed };
+}
+
+/** The reward used on a paid bill (if any), and whether it has already been given back. For the refund form. */
+export async function rewardUsedOnBill(businessId: string, orderId: string): Promise<{ externalId: string; returned: boolean } | null> {
+  const used = await db.customerOsEvent.findFirst({ where: { businessId, kind: "REDEEM", invoiceId: orderId }, select: { refId: true } });
+  if (!used) return null;
+  const back = await db.customerOsEvent.findUnique({ where: { businessId_kind_refId: { businessId, kind: "RETURN", refId: used.refId } }, select: { id: true } });
+  return { externalId: used.refId, returned: !!back };
 }
 
 /** The bill was not paid: give the points back now, or queue it if Customer OS cannot be reached. Never throws. */

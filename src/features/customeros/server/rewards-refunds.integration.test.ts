@@ -7,6 +7,7 @@ import { checkout as checkoutRaw, previewBill } from "@/features/orders/server/s
 import { refundInvoice as refundRaw } from "@/features/orders/server/void";
 import { saveLink } from "./link";
 import { drainBackgroundSends, enqueueIfLinked, enqueueRelease, flushBusiness, refundShare } from "./outbox";
+import { rewardUsedOnBill } from "./reward";
 
 /** The real functions start a background send after saving; wait for it so each test sees a settled queue. */
 const refundInvoice = async (...args: Parameters<typeof refundRaw>) => {
@@ -364,5 +365,129 @@ describe("giving a reward back later", () => {
     expect(of("/rewards/release")).toHaveLength(0);
     const ev = (await events(a, "RELEASE")).find((e) => e.refId === usedId)!;
     expect(ev).toMatchObject({ status: "SENT", lastError: "The reward was used on a paid bill." });
+  });
+});
+
+// ---------- giving a reward back with a whole refund ----------
+
+const payWithReward = async (orderId: string) => {
+  const t = await previewBill(a.owner, orderId, { kind: "none" }, 0, { valueMinor: 50_000 });
+  return checkout(a.owner, orderId, { discount: { kind: "none" }, payments: [{ method: "CASH", amount: t.grandTotal }], rewardId: "rw-1" });
+};
+
+describe("giving the reward back when the whole bill is refunded", () => {
+  it("is offered for a bill that used one, and goes out as a release for that very use", async () => {
+    const order = await openOrder(a);
+    const invoice = await payWithReward(order.id);
+    const usedId = of("/rewards/redeem").at(-1)!.body.externalId as string;
+    expect(await rewardUsedOnBill(a.businessId, order.id)).toEqual({ externalId: usedId, returned: false });
+    calls.length = 0;
+
+    await refundInvoice(a.owner, invoice.id, "Customer sent it back", { returnReward: true });
+    const ev = (await events(a, "RETURN")).find((e) => e.refId === usedId)!;
+    expect(ev).toMatchObject({ status: "SENT", lastError: "Reward given back.", invoiceId: invoice.id });
+    expect(of("/rewards/release")).toHaveLength(1);
+    expect(of("/rewards/release")[0]!.body).toEqual({ externalId: usedId });
+    expect(await rewardUsedOnBill(a.businessId, order.id)).toEqual({ externalId: usedId, returned: true });
+  });
+
+  it("a refund without the choice leaves the reward used", async () => {
+    const order = await openOrder(a);
+    const invoice = await payWithReward(order.id);
+    calls.length = 0;
+    await refundInvoice(a.owner, invoice.id, "Customer sent it back");
+    expect(of("/rewards/release")).toHaveLength(0);
+    expect((await events(a, "RETURN")).filter((x) => x.invoiceId === invoice.id)).toHaveLength(0);
+  });
+
+  it("only with the refund that finishes the bill: a part refund is refused and nothing is written", async () => {
+    const order = await openOrder(a);
+    const invoice = await payWithReward(order.id);
+    await expect(refundInvoice(a.owner, invoice.id, "Part only please", { amount: 10_000, returnReward: true })).rejects.toThrow(/whole bill/);
+    expect(await db.creditNote.count({ where: { invoiceId: invoice.id } })).toBe(0);
+    // Part now, then the rest with the choice.
+    await refundInvoice(a.owner, invoice.id, "First part refunded", { amount: 10_000 });
+    await refundInvoice(a.owner, invoice.id, "The rest refunded", { returnReward: true });
+    expect((await events(a, "RETURN")).filter((e) => e.invoiceId === invoice.id)).toHaveLength(1);
+  });
+
+  it("a bill that used no reward cannot have one given back, and the refund is not made", async () => {
+    const { invoice } = await paidBill(a);
+    await expect(refundInvoice(a.owner, invoice.id, "No reward here", { returnReward: true })).rejects.toThrow(/No Customer OS reward was used/);
+    expect(await db.creditNote.count({ where: { invoiceId: invoice.id } })).toBe(0);
+  });
+
+  it("if Customer OS is down it is retried, and it is never given back twice", async () => {
+    const order = await openOrder(a);
+    const invoice = await payWithReward(order.id);
+    handler = (c) => (c.path === "/rewards/release" ? err(503, "down") : healthy(c));
+    await refundInvoice(a.owner, invoice.id, "Customer sent it back", { returnReward: true });
+    const usedId = of("/rewards/redeem").at(-1)!.body.externalId as string;
+    expect((await events(a, "RETURN")).find((e) => e.refId === usedId)).toMatchObject({ status: "PENDING", attempts: 1 });
+    handler = healthy;
+    calls.length = 0;
+    await flushBusiness(a.businessId, { now: new Date(Date.now() + 3 * 3_600_000) });
+    // (Releases queued by earlier tests are due by now too, so look only at this one.)
+    expect(of("/rewards/release").filter((c) => c.body.externalId === usedId)).toHaveLength(1);
+    expect((await events(a, "RETURN")).find((e) => e.refId === usedId)!.status).toBe("SENT");
+  });
+});
+
+// ---------- free-item rewards ----------
+
+const FREE = { customerRewardId: "rw-free", name: "Free thali", type: "FREE_ITEM", valueMinor: null, requiredBalance: 300, redeemable: true };
+const freeCos = (c: Call) => {
+  if (c.path === "/customers/lookup") return lookup([FREE]);
+  if (c.path === "/rewards/redeem") return ok({ redemptionId: "red-f", rewardName: "Free thali", type: "FREE_ITEM", valueMinor: null, consumed: 300, balance: 200, deduplicated: false });
+  return healthy(c);
+};
+const firstItem = (orderId: string) => db.orderItem.findFirstOrThrow({ where: { orderId } });
+
+describe("free-item rewards", () => {
+  it("takes one unit of the chosen item off the bill, at that item's own price", async () => {
+    handler = freeCos;
+    const order = await openOrder(a, { quantity: 2 }); // 2 x Rs 1,000
+    const item = await firstItem(order.id);
+    const t = await previewBill(a.owner, order.id, { kind: "none" }, 0, { valueMinor: item.unitPrice });
+    const invoice = await checkout(a.owner, order.id, { discount: { kind: "none" }, payments: [{ method: "CASH", amount: t.grandTotal }], rewardId: "rw-free", freeItemId: item.id });
+    expect(invoice.loyaltyDiscount).toBe(100_000); // one unit, not both
+    expect(invoice.pointsRedeemed).toBe(300);
+    expect(invoice.subtotal).toBe(200_000);
+    expect(of("/rewards/redeem")[0]!.body).toMatchObject({ customerRewardId: "rw-free", phone: a.phone });
+    const audit = await db.auditEvent.findFirst({ where: { businessId: a.businessId, entityId: invoice.id, action: "bill.checkout" } });
+    expect(JSON.stringify(audit)).toContain("Free thali");
+  });
+
+  it("asks which item is free, and refuses an item that is not on this bill, is cancelled or is not charged for", async () => {
+    handler = freeCos;
+    const order = await openOrder(a);
+    const other = await openOrder(a);
+    const otherItem = await firstItem(other.id);
+    const pay = (freeItemId?: string) => checkout(a.owner, order.id, { discount: { kind: "none" }, payments: [{ method: "CASH", amount: 1 }], rewardId: "rw-free", freeItemId });
+    await expect(pay()).rejects.toThrow(/Choose which item/);
+    await expect(pay(otherItem.id)).rejects.toThrow(/cannot be made free/);
+    await expect(pay("nope")).rejects.toThrow(/cannot be made free/);
+    const mine = await firstItem(order.id);
+    await db.orderItem.update({ where: { id: mine.id }, data: { complimentary: true } });
+    await expect(pay(mine.id)).rejects.toThrow(/cannot be made free/);
+    await db.orderItem.update({ where: { id: mine.id }, data: { complimentary: false, status: "CANCELLED" } });
+    await expect(pay(mine.id)).rejects.toThrow(/cannot be made free/);
+    expect(of("/rewards/redeem")).toHaveLength(0); // nothing was used in Customer OS for any of them
+  });
+
+  it("a free item worth more than what is left of the bill after a discount is refused and given back", async () => {
+    handler = freeCos;
+    const order = await openOrder(a);
+    const item = await firstItem(order.id);
+    await expect(checkout(a.owner, order.id, { discount: { kind: "percent", bps: 5000 }, payments: [{ method: "CASH", amount: 1 }], rewardId: "rw-free", freeItemId: item.id })).rejects.toThrow(/larger than the bill/);
+    expect(of("/rewards/release")).toHaveLength(1);
+  });
+
+  it("if Customer OS answers with a different kind of reward than it listed, the use is given back", async () => {
+    handler = (c) => (c.path === "/rewards/redeem" ? ok({ redemptionId: "r", rewardName: "x", type: "DISCOUNT", valueMinor: 50_000, consumed: 300, balance: 0, deduplicated: false }) : freeCos(c));
+    const order = await openOrder(a);
+    const item = await firstItem(order.id);
+    await expect(checkout(a.owner, order.id, { discount: { kind: "none" }, payments: [{ method: "CASH", amount: 1 }], rewardId: "rw-free", freeItemId: item.id })).rejects.toThrow(/changed/);
+    expect(of("/rewards/release")).toHaveLength(1);
   });
 });
