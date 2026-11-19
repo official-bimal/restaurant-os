@@ -19,10 +19,11 @@ function needBills(ctx: TenantContext) {
 
 async function header(businessId: string, branchId: string) {
   const [business, branch] = await Promise.all([
-    db.business.findUniqueOrThrow({ where: { id: businessId }, select: { name: true, panNumber: true, timezone: true } }),
+    db.business.findUniqueOrThrow({ where: { id: businessId }, select: { name: true, legalName: true, address: true, panNumber: true, timezone: true } }),
     db.branch.findUniqueOrThrow({ where: { businessId_id: { businessId, id: branchId } }, select: { name: true, address: true } }),
   ]);
-  return { business: business.name, pan: business.panNumber, timezone: business.timezone, branch: branch.name, address: branch.address };
+  // The legal name and head-office address from the business profile are used when set; a branch address wins when it has one.
+  return { business: business.legalName ?? business.name, pan: business.panNumber, timezone: business.timezone, branch: branch.name, address: branch.address ?? business.address };
 }
 
 export async function getReceipt(ctx: TenantContext, invoiceId: string) {

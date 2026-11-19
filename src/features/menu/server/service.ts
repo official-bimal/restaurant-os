@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { keepDeletedDish } from "@/features/business/server/trash";
 import type { TenantContext } from "@/server/auth";
 import { can } from "@/server/permissions";
 import { DomainError } from "@/server/errors";
@@ -207,6 +208,7 @@ export async function deleteItem(ctx: TenantContext, id: string) {
     throw new DomainError("This item has been ordered before, so it cannot be deleted. Mark it unavailable instead.");
   }
   await db.$transaction(async (tx) => {
+    await keepDeletedDish(tx, ctx, id);
     await tx.menuItem.delete({ where: { businessId_id: { businessId: ctx.businessId, id } } });
     await audit(tx, ctx, "menu.item.delete", "MenuItem", id, { name: item.name });
   });

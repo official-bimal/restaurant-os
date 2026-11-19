@@ -153,6 +153,17 @@ model Business {
   id                        String   @id @default(cuid())
   name                      String
   panNumber                 String?
+  /// Business profile (Settings, Business profile). All optional.
+  legalName                 String?
+  phone                     String?
+  email                     String?
+  address                   String?
+  businessType              String?
+  /// Opening date, YYYY-MM-DD.
+  openedOn                  String?
+  website                   String?
+  facebook                  String?
+  instagram                 String?
   timezone                  String   @default("Asia/Kathmandu")
   /// Shows the branch switcher, branch reports and the Branches page. Off for a single-location business, so the menus stay simple.
   multiBranch               Boolean  @default(false)
@@ -204,6 +215,8 @@ model Business {
   invoices         Invoice[]
   stations         Station[]
   auditEvents      AuditEvent[]
+  logo             BusinessLogo?
+  trash            TrashItem[]
   tableSessions    TableSession[]
   guestSubmissions GuestSubmission[]
   serviceRequests  ServiceRequest[]
@@ -2580,4 +2593,30 @@ model TipPayoutLine {
   payout TipPayout @relation(fields: [businessId, payoutId], references: [businessId, id], onDelete: Cascade)
 
   @@index([businessId, payoutId])
+}
+
+/// The business logo, kept as the uploaded (small) picture. One per business.
+model BusinessLogo {
+  businessId  String   @id
+  contentType String
+  bytes       Int
+  data        Bytes
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+/// A deleted dish kept so it can be put back. `payload` is a copy of the row and its recipe.
+model TrashItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  kind        String
+  label       String
+  payload     Json
+  deletedById String?
+  deletedAt   DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, deletedAt])
 }
