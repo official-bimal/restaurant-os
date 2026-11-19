@@ -1,18 +1,32 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatNpr } from "@/features/billing/calc";
-import { getOnlineStatus } from "@/features/online/server/service";
+import { getOnlineStatus, lookupBranch } from "@/features/online/server/service";
+import { shorten } from "@/features/online/manifest";
+import { InstallApp } from "@/components/install-app";
+import { RegisterWorker } from "@/components/register-worker";
 import { LangSwitch } from "@/app/t/[token]/lang";
 import { cancelOrderAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Your order",
-  referrer: "no-referrer",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({ params }: { params: Promise<{ token: string; tracking: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const base: Metadata = { title: "Your order", referrer: "no-referrer", robots: { index: false, follow: false } };
+  const branch = await lookupBranch(token);
+  if (!branch) return base;
+  // The restaurant's own app: its name, its icon, and a manifest that opens this page when it is added to the home screen.
+  return {
+    ...base,
+    title: `Your order · ${branch.businessName}`,
+    manifest: `/o/${token}/manifest.webmanifest`,
+    appleWebApp: { capable: true, title: shorten(branch.businessName, 12), statusBarStyle: "black-translucent" },
+    icons: { icon: `/o/${token}/icon/192`, apple: `/o/${token}/icon/180` },
+  };
+}
+
+export const generateViewport = (): Viewport => ({ themeColor: "#121212", viewportFit: "cover" });
 
 const TONE: Record<string, string> = {
   PENDING: "bg-amber-50 text-amber-900 ring-amber-200",
@@ -42,6 +56,7 @@ export default async function OnlineStatusPage({ params, searchParams }: PagePro
   return (
     <main className="guest-dark min-h-screen">
       <div className="mx-auto max-w-lg space-y-4 p-4">
+        <RegisterWorker />
         {waiting && <AutoRefresh everyMs={5000} live={false} />}
         <LangSwitch />
         <header>
@@ -100,6 +115,7 @@ export default async function OnlineStatusPage({ params, searchParams }: PagePro
             <button className="min-h-11 w-full rounded-full border border-red-300 px-4 font-medium text-red-700">Cancel this order</button>
           </form>
         )}
+        <InstallApp who="customer" />
         <Link href={`/o/${token}`} className="block text-center text-sm text-stone-500 underline">
           Order something else
         </Link>

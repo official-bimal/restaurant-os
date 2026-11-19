@@ -11,11 +11,11 @@ export function proxy(request: NextRequest) {
   // Delivery links work the same way: the long random token in the URL is the credential.
   // Dish photos are public: they are shown on the guest menu.
   // The install files (manifest, icons, service worker) are fetched by the phone itself, without a session.
-  const installFiles = ["/manifest.webmanifest", "/icon", "/apple-icon", "/sw.js"];
+  const installFiles = ["/manifest.webmanifest", "/icon", "/apple-icon", "/sw.js", "/offline"];
   // The scheduled alert check carries its own secret instead of a session.
   // The public landing page.
   if (pathname === "/") return NextResponse.next();
-  if (installFiles.includes(pathname) || pathname.startsWith("/api/cron/")) return NextResponse.next();
+  if (installFiles.includes(pathname) || pathname.startsWith("/pwa/") || pathname.startsWith("/api/cron/")) return NextResponse.next();
   if (pathname.startsWith("/login") || pathname.startsWith("/t/") || pathname.startsWith("/o/") || pathname.startsWith("/track/") || pathname.startsWith("/rider/") || pathname.startsWith("/dish/")) {
     return NextResponse.next();
   }

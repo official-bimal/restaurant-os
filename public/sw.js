@@ -6,11 +6,22 @@
  *   - the page itself, network first (a fresh copy whenever the network answers within 4 seconds, the saved copy otherwise);
  *     a redirect (for example to the sign-in page) is never saved, and
  *   - the app's own fixed script and style files (/_next/static/..., named by content, so they never go stale).
+ * A third thing, with no private data in it: the plain "You are offline" page (/offline), kept so that a page which cannot be reached
+ * shows that instead of the browser's error screen. Pages themselves are never kept for this.
  * Every other request goes straight to the network untouched, so no other page, bill or customer data is kept here. */
 
-const CACHE = "ros-offline-v1";
+const CACHE = "ros-offline-v2";
+const OFFLINE_PAGE = "/offline";
 
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.add(OFFLINE_PAGE))
+      .catch(() => {})
+      .then(() => self.skipWaiting()),
+  );
+});
 self.addEventListener("activate", (event) =>
   event.waitUntil(
     Promise.all([
@@ -53,6 +64,18 @@ self.addEventListener("fetch", (event) => {
           const saved = await cache.match("/quick");
           return saved || new Response("You are offline and this page was never opened online on this phone.", { status: 503 });
         }
+      }),
+    );
+    return;
+  }
+
+  // Any other page that cannot be reached: the friendly offline page. The network is tried first and its answer is never changed
+  // (a slow or error answer from the server is still the server's answer); only "no connection at all" is replaced.
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req).catch(async () => {
+        const cache = await caches.open(CACHE);
+        return (await cache.match(OFFLINE_PAGE)) || new Response("You are offline.", { status: 503, headers: { "Content-Type": "text/plain" } });
       }),
     );
   }

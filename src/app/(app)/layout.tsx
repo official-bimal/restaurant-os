@@ -17,6 +17,7 @@ import { NavLinks, type NavGroup } from "@/components/nav-links";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { Icon } from "@/components/icons";
 import { NotificationWatcher } from "@/components/notification-watcher";
+import { RegisterWorker } from "@/components/register-worker";
 import { ClockWidget } from "@/components/clock-widget";
 import { myClock } from "@/features/payroll/server/time";
 import { pushPublicKey } from "@/features/notifications/server/push";
@@ -151,7 +152,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const bottom = (
     <div className="space-y-2 border-t border-stone-200 pt-3">
       <ClockWidget since={clock.since ? clock.since.toISOString() : null} workedTodayMinutes={clock.workedTodayMinutes} timeZone={business.timezone} askLocation={business.clockRequireLocation} />
-      <NotificationWatcher
+      <RegisterWorker />
+        <NotificationWatcher
         alerts={urgent}
         push={pushPublicKey() ? { publicKey: pushPublicKey()!, subscribe: subscribePushAction, unsubscribe: unsubscribePushAction } : null}
       />

@@ -9,14 +9,24 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Restaurant OS",
     short_name: "Restaurant OS",
     description: "Orders, kitchen and billing for restaurants and cafes.",
+    id: "/",
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     background_color: "#f6f5f2",
     theme_color: "#0f857a",
+    lang: "en",
+    categories: ["business", "productivity"],
     icons: [
-      { src: "/icon", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/apple-icon", sizes: "180x180", type: "image/png", purpose: "any" },
+      { src: "/pwa/icon/192", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/pwa/icon/512", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/pwa/icon/maskable-512", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    ],
+    // Long-press the app icon on Android for these.
+    shortcuts: [
+      { name: "Orders", url: "/orders", icons: [{ src: "/pwa/icon/192", sizes: "192x192", type: "image/png" }] },
+      { name: "Kitchen", url: "/kitchen", icons: [{ src: "/pwa/icon/192", sizes: "192x192", type: "image/png" }] },
+      { name: "Quick order", url: "/quick", icons: [{ src: "/pwa/icon/192", sizes: "192x192", type: "image/png" }] },
     ],
   };
 }

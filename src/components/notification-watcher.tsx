@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { PushToggle, type PushConfig } from "./push-toggle";
+import { InstallApp } from "./install-app";
 import { useRouter } from "next/navigation";
 
 interface Alert {
@@ -151,6 +152,7 @@ export function NotificationWatcher({ alerts, push }: { alerts: Alert[]; push: P
       </div>
       {permission === "denied" && <p className="text-[11px] text-stone-500">Pop-ups are blocked in this browser&rsquo;s settings.</p>}
       {push && <PushToggle config={push} />}
+      <InstallApp who="staff" className="mt-2" />
     </div>
   );
 }

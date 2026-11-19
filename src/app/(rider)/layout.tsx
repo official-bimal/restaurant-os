@@ -2,6 +2,8 @@ import { db } from "@/server/db";
 import { requireTenant } from "@/server/auth";
 import { logout } from "@/app/login/actions";
 import { PushToggle } from "@/components/push-toggle";
+import { InstallApp } from "@/components/install-app";
+import { RegisterWorker } from "@/components/register-worker";
 import { pushPublicKey } from "@/features/notifications/server/push";
 import { subscribePushAction, unsubscribePushAction } from "@/app/(app)/notifications/push-actions";
 
@@ -29,6 +31,10 @@ export default async function RiderLayout({ children }: { children: React.ReactN
           <PushToggle config={{ publicKey: pushPublicKey()!, subscribe: subscribePushAction, unsubscribe: unsubscribePushAction }} />
         </div>
       )}
+      <div className="mx-auto max-w-md px-4 pt-3">
+        <InstallApp who="staff" />
+      </div>
+      <RegisterWorker />
       <main className="mx-auto max-w-md p-4">{children}</main>
     </div>
   );

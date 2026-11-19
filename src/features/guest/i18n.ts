@@ -44,6 +44,15 @@ export const STRINGS = {
   tileRewardsSub: { en: "Earn points every time you visit", ne: "हरेक भ्रमणमा अंक कमाउनुहोस्" },
   joinNow: { en: "Join and start ordering", ne: "जोडिनुहोस् र अर्डर सुरु गर्नुहोस्" },
 
+  // install as an app
+  installTitle: { en: "Add to your home screen", ne: "होम स्क्रिनमा थप्नुहोस्" },
+  installWhy: { en: "Order again in one tap, like an app.", ne: "एप जस्तै, एक ट्यापमा फेरि अर्डर गर्नुहोस्।" },
+  installButton: { en: "Install app", ne: "एप इन्स्टल गर्नुहोस्" },
+  installNotNow: { en: "Not now", ne: "अहिले होइन" },
+  installIos1: { en: "Tap the Share button (a square with an arrow).", ne: "Share बटन थिच्नुहोस् (वर्गभित्र तीर भएको)।" },
+  installIosOther: { en: "Tap the Share button in this browser's menu, or open this page in Safari.", ne: "यो ब्राउजरको मेनुमा Share बटन थिच्नुहोस्, वा यो पेज Safari मा खोल्नुहोस्।" },
+  installIos2: { en: "Choose Add to Home Screen, then Add.", ne: "Add to Home Screen छान्नुहोस्, अनि Add थिच्नुहोस्।" },
+
   // Wi-Fi
   wifiTitle: { en: "Free Wi-Fi", ne: "निःशुल्क Wi-Fi" },
   wifiNetwork: { en: "Network", ne: "नेटवर्क" },

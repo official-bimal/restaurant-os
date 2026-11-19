@@ -1,6 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { getOnlineMenu, lookupBranch } from "@/features/online/server/service";
 import { prepMessage } from "@/features/online/rules";
+import { shorten } from "@/features/online/manifest";
+import { InstallApp } from "@/components/install-app";
+import { RegisterWorker } from "@/components/register-worker";
 import { formatNpr } from "@/features/billing/calc";
 import { LangSwitch } from "@/app/t/[token]/lang";
 import { OnlineMenu } from "./online-menu";
@@ -8,16 +11,28 @@ import { OnlineMenu } from "./online-menu";
 export const dynamic = "force-dynamic";
 
 // The token in the URL is the link the restaurant shares; keep it out of Referer headers. The page itself may be found.
-export const metadata: Metadata = {
-  title: "Order online",
-  referrer: "no-referrer",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const base: Metadata = { title: "Order online", referrer: "no-referrer", robots: { index: false, follow: false } };
+  const branch = await lookupBranch(token);
+  if (!branch) return base;
+  // The restaurant's own app: its name, its icon, and a manifest that opens this page when it is added to the home screen.
+  return {
+    ...base,
+    title: `Order from ${branch.businessName}`,
+    manifest: `/o/${token}/manifest.webmanifest`,
+    appleWebApp: { capable: true, title: shorten(branch.businessName, 12), statusBarStyle: "black-translucent" },
+    icons: { icon: `/o/${token}/icon/192`, apple: `/o/${token}/icon/180` },
+  };
+}
+
+export const generateViewport = (): Viewport => ({ themeColor: "#121212", viewportFit: "cover" });
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="guest-dark min-h-screen">
       <div className="mx-auto max-w-lg p-4">
+        <RegisterWorker />
         <LangSwitch />
         {children}
       </div>
@@ -62,6 +77,7 @@ export default async function OnlineOrderPage({ params }: PageProps<"/o/[token]"
           </p>
         )}
       </header>
+      <InstallApp who="customer" className="mb-4" />
       {menu.length === 0 ? (
         <p className="py-10 text-center text-stone-500">Nothing is available to order right now.</p>
       ) : (
