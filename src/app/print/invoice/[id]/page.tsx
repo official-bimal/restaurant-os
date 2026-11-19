@@ -50,6 +50,7 @@ export default async function PrintInvoice({ params, searchParams }: PageProps<"
       <Rule />
       <Row left="Subtotal" right={formatNpr(inv.subtotal)} />
       {inv.discount > 0 && <Row left="Discount" right={`-${formatNpr(inv.discount)}`} />}
+      {inv.dealName && inv.dealDiscount > 0 && <div className="pl-3 text-[11px]">incl. {inv.dealName}: {formatNpr(inv.dealDiscount)}</div>}
       {inv.loyaltyDiscount > 0 && <Row left="Reward discount" right={`-${formatNpr(inv.loyaltyDiscount)}`} />}
       {inv.serviceCharge > 0 && <Row left="Service charge" right={formatNpr(inv.serviceCharge)} />}
       {inv.vat > 0 && <Row left="VAT" right={formatNpr(inv.vat)} />}

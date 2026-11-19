@@ -1,4 +1,6 @@
 import { unseenAlertCount } from "@/features/owner/server/owner";
+import { hukkaAlertCount } from "@/features/hukka/server/service";
+import { reservationsWaitingCount } from "@/features/reservations/server/service";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
@@ -45,7 +47,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const ctx = await requireTenant();
   // A rider has their own page and sees nothing else.
   if (ctx.role === "RIDER") redirect("/deliveries");
-  const [business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting] = await Promise.all([
+  const [business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting, hukkaLong, hukkaCategories, reservationsWaiting] = await Promise.all([
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId } }),
     db.user.findUniqueOrThrow({ where: { id: ctx.userId }, select: { name: true } }),
     inboxCount(ctx),
@@ -56,7 +58,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     myClock(ctx),
     unseenAlertCount(ctx),
     onlineInboxCount(ctx),
+    hukkaAlertCount(ctx),
+    db.menuCategory.count({ where: { businessId: ctx.businessId, OR: [{ name: { contains: "hukka", mode: "insensitive" } }, { name: { contains: "shisha", mode: "insensitive" } }, { name: { contains: "hookah", mode: "insensitive" } }] } }),
+    reservationsWaitingCount(ctx),
   ]);
+  const hukkaOn = hukkaCategories > 0;
 
   // The badge and the chime follow what this person has not read yet.
   const unreadNotifications = notifications.filter((n) => !n.read);
@@ -73,6 +79,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         ...(can(ctx.role, "order.create") && can(ctx.role, "order.edit") ? [{ href: "/quick", label: "Quick order", icon: "orders", tone: "teal" as const }] : []),
         { href: "/kitchen", label: "Kitchen", icon: "kitchen", tone: "orange" as const },
         ...(can(ctx.role, "order.edit") ? [{ href: "/dispatch", label: "Dispatch", icon: "truck", tone: "blue" as const }] : []),
+        ...(can(ctx.role, "order.edit") && hukkaOn ? [{ href: "/hukka", label: "Hukka timer", icon: "clock", tone: "amber" as const, badge: hukkaLong, badgeTone: "alert" as const }] : []),
+        ...(can(ctx.role, "order.edit") ? [{ href: "/reservations", label: "Reservations", icon: "tables", tone: "violet" as const, badge: reservationsWaiting, badgeTone: "alert" as const }] : []),
+        ...(can(ctx.role, "menu.manage") ? [{ href: "/deals", label: "Deals", icon: "campaigns", tone: "rose" as const }] : []),
         ...(can(ctx.role, "floor.manage") ? [{ href: "/tables", label: "Tables", icon: "tables", tone: "violet" as const }] : []),
         ...(can(ctx.role, "floor.manage") ? [{ href: "/delivery", label: "Delivery pricing", icon: "truck", tone: "orange" as const }] : []),
       ],

@@ -1,4 +1,6 @@
 import { autoQueueKitchenSlip } from "@/features/printing/server/queue";
+import { evaluateDeal } from "@/features/billing/server/deals";
+import { combineDiscount } from "@/features/billing/deals";
 import { cleanBuyer } from "@/features/billing/ird";
 import { db } from "@/server/db";
 import { DomainError } from "@/server/errors";
@@ -331,14 +333,16 @@ export async function previewBill(ctx: TenantContext, orderId: string, discount:
     ? await db.customer.findFirst({ where: { id: order.customerId, businessId: ctx.businessId }, select: { pointsBalance: true } })
     : null;
   const plan = planRedemption({ settings, order, customer, requestedPoints: redeemPoints });
+  const liveItems = order.items.filter((i) => i.status !== "CANCELLED");
+  // An automatic deal (happy hour, combo) takes its saving off first; the person's own discount comes off what is left.
+  const deal = await evaluateDeal(db, ctx.businessId, order.branchId, business.timezone, liveItems);
+  const effective = deal ? combineDiscount(discount, liveItems.reduce((n, i) => n + (i.complimentary ? 0 : i.unitPrice * i.quantity), 0), deal.amount) : discount;
   let totals;
   try {
     totals = calculateBill(
-      order.items
-        .filter((i) => i.status !== "CANCELLED")
-        .map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
+      liveItems.map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
       {
-        discount,
+        discount: effective,
         loyaltyDiscount: plan.discount + (reward?.valueMinor ?? 0),
         serviceChargeBps: business.serviceChargeBps,
         vatMode: business.vatMode,
@@ -354,7 +358,7 @@ export async function previewBill(ctx: TenantContext, orderId: string, discount:
     throw e;
   }
   // Points are earned on the food, not on the delivery fee.
-  return { ...totals, redeemPoints: plan.points, pointsToEarn: planEarn(settings, order, totals.grandTotal - totals.deliveryFee) };
+  return { ...totals, deal: deal ? { name: deal.name, amount: deal.amount } : null, redeemPoints: plan.points, pointsToEarn: planEarn(settings, order, totals.grandTotal - totals.deliveryFee) };
 }
 
 export async function checkout(ctx: TenantContext, orderId: string, input: CheckoutInput) {
@@ -394,12 +398,14 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
       ? await tx.customer.findFirst({ where: { id: order.customerId, businessId }, select: { pointsBalance: true } })
       : null;
     const plan = planRedemption({ settings, order, customer, requestedPoints: input.redeemPoints ?? 0 });
+    const deal = await evaluateDeal(tx, businessId, branchId, business.timezone, active);
+    const effective = deal ? combineDiscount(input.discount, active.reduce((n, i) => n + (i.complimentary ? 0 : i.unitPrice * i.quantity), 0), deal.amount) : input.discount;
     let totals;
     try {
       totals = calculateBill(
         active.map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
         {
-          discount: input.discount,
+          discount: effective,
           loyaltyDiscount: plan.discount + (used?.valueMinor ?? 0),
           serviceChargeBps: business.serviceChargeBps,
           vatMode: business.vatMode,
@@ -445,6 +451,8 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         deliveryFee: totals.deliveryFee,
         buyerName: buyer.name,
         buyerPan: buyer.pan,
+        dealName: deal?.name ?? null,
+        dealDiscount: deal?.amount ?? 0,
         customerId: order.customerId,
         pointsEarned: earned,
         pointsRedeemed: plan.points + (used?.consumed ?? 0),

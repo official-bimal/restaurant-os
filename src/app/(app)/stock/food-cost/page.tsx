@@ -13,6 +13,7 @@ const CLASS: Record<DishClass, { label: string; tone: string; hint: string }> = 
   PUZZLE: { label: "Puzzle", tone: "bg-sky-100 text-sky-900", hint: "Earns well but few order it. Put it forward on the menu or in the staff's pitch." },
   DOG: { label: "Dog", tone: "bg-rose-100 text-rose-900", hint: "Sells little and earns little. Think about dropping or changing it." },
   NO_RECIPE: { label: "No recipe", tone: "bg-stone-200 text-stone-700", hint: "Write its recipe to see its cost." },
+  NO_COST: { label: "Ingredient prices missing", tone: "bg-stone-200 text-stone-700", hint: "Record a purchase of each ingredient in its recipe, with what you paid." },
 };
 
 const input = "mt-1 block min-h-10 rounded-lg border border-stone-300 px-3 text-sm";
@@ -77,7 +78,7 @@ export default async function FoodCostPage({ searchParams }: PageProps<"/stock/f
       </div>
       {t.noRecipeShare > 0 && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          {t.noRecipeShare}% of sales are dishes with no recipe, so the food cost above is lower than the truth. Write their recipes under Recipes.
+          {t.noRecipeShare}% of sales are dishes with no recipe, or whose ingredients have no price yet, so the food cost above is lower than the truth. Write the recipes under Recipes, and record a purchase of each ingredient (Stock) with what you paid.
         </p>
       )}
 

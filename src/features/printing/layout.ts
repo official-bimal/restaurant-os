@@ -95,6 +95,9 @@ export interface ReceiptData {
   bsDate?: string;
   buyerName?: string | null;
   buyerPan?: string | null;
+  /** The automatic deal applied, and what it took off (already inside the discount). */
+  dealName?: string | null;
+  dealDiscount?: number;
   /** Set on a reprint: the line that marks it as a copy. */
   copy?: string | null;
   /** Null for a bill made with no connection: it gets its order number when it reaches the server. */
@@ -145,6 +148,7 @@ export function layoutReceipt(d: ReceiptData, s: LayoutSettings, cols: number): 
   add(rule(cols));
   rows("Subtotal", money(d.subtotal));
   if (d.discount > 0) rows("Discount", neg(d.discount));
+  if (d.dealName && (d.dealDiscount ?? 0) > 0) wrap(`  incl. ${d.dealName}: ${money(d.dealDiscount!)}`, cols).forEach((t) => add(t));
   if (d.loyaltyDiscount > 0) rows("Reward discount", neg(d.loyaltyDiscount));
   if (d.serviceCharge > 0) rows("Service charge", money(d.serviceCharge));
   if (d.vat > 0) rows("VAT", money(d.vat));

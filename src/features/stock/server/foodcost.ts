@@ -47,14 +47,21 @@ export async function getFoodCostReport(ctx: TenantContext, range: { from?: stri
   const recipeLines = await db.recipeLine.findMany({ where: { businessId, menuItemId: { in: menuIds } }, select: { menuItemId: true, stockItemId: true, quantity: true } });
   const cost = new Map(levels.map((l) => [l.stockItemId, l.costMilli]));
   const unitCost = new Map<string, number>();
+  const unpriced = new Set<string>();
   for (const id of menuIds) {
     const lines = recipeLines.filter((r) => r.menuItemId === id);
-    if (lines.length > 0) unitCost.set(id, recipeCost(lines.map((l) => ({ quantity: l.quantity, costMilli: cost.get(l.stockItemId) ?? 0 }))));
+    if (lines.length === 0) continue;
+    // An ingredient with no price yet would make the dish look free: wait until every ingredient has been bought at a real price.
+    if (lines.some((l) => (cost.get(l.stockItemId) ?? 0) === 0)) {
+      unpriced.add(id);
+      continue;
+    }
+    unitCost.set(id, recipeCost(lines.map((l) => ({ quantity: l.quantity, costMilli: cost.get(l.stockItemId) ?? 0 }))));
   }
 
   const sold = new Map<string, DishSale>();
   for (const i of items) {
-    const row = sold.get(i.menuItemId) ?? { menuItemId: i.menuItemId, name: i.name, quantity: 0, revenue: 0, unitCost: unitCost.get(i.menuItemId) ?? null };
+    const row = sold.get(i.menuItemId) ?? { menuItemId: i.menuItemId, name: i.name, quantity: 0, revenue: 0, unitCost: unitCost.get(i.menuItemId) ?? null, missingCost: unpriced.has(i.menuItemId) };
     row.quantity += i.quantity;
     row.revenue += i.complimentary ? 0 : withoutVat(i.unitPrice, biz.vatBps, inclusive) * i.quantity;
     sold.set(i.menuItemId, row);
@@ -69,7 +76,7 @@ export async function getFoodCostReport(ctx: TenantContext, range: { from?: stri
   const waste = -sum("WASTE");
   // A count that finds less than the book says is a loss (negative); finding more is a gain.
   const countLoss = -sum("COUNT");
-  const noRecipeRevenue = rows.filter((r) => r.klass === "NO_RECIPE").reduce((n, r) => n + r.revenue, 0);
+  const noRecipeRevenue = rows.filter((r) => r.klass === "NO_RECIPE" || r.klass === "NO_COST").reduce((n, r) => n + r.revenue, 0);
 
   return {
     from,

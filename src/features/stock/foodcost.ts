@@ -14,9 +14,11 @@ export interface DishSale {
   revenue: number;
   /** Cost of one portion from its recipe, or null when it has no recipe. */
   unitCost: number | null;
+  /** True when the dish has a recipe but some ingredient has no price yet, so its cost cannot be worked out. */
+  missingCost?: boolean;
 }
 
-export type DishClass = "STAR" | "PLOWHORSE" | "PUZZLE" | "DOG" | "NO_RECIPE";
+export type DishClass = "STAR" | "PLOWHORSE" | "PUZZLE" | "DOG" | "NO_RECIPE" | "NO_COST";
 
 export interface DishRow extends DishSale {
   cost: number | null;
@@ -42,7 +44,7 @@ export function analyse(sales: DishSale[]): DishRow[] {
   const popularAt = judged.length > 0 ? (0.7 * totalQty) / judged.length : 0;
 
   return sales.map((s) => {
-    if (s.unitCost === null) return { ...s, cost: null, profit: null, costPercent: null, profitEach: null, klass: "NO_RECIPE" };
+    if (s.unitCost === null) return { ...s, cost: null, profit: null, costPercent: null, profitEach: null, klass: s.missingCost ? "NO_COST" : "NO_RECIPE" };
     const cost = s.unitCost * s.quantity;
     const profit = s.revenue - cost;
     const profitEach = s.quantity > 0 ? Math.round(profit / s.quantity) : 0;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DishPhoto } from "./dish-photo";
 import { requireTenant } from "@/server/auth";
 import { getMenuAdmin } from "@/features/menu/server/service";
@@ -90,7 +91,12 @@ export default async function MenuPage({ searchParams }: PageProps<"/menu">) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Menu</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">Menu</h1>
+        <Link href="/menu/photos" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
+          Add many photos at once
+        </Link>
+      </div>
       <MenuTabs current="dishes" />
 
       {typeof error === "string" && (

@@ -509,6 +509,11 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                 ]}
                 total={order.invoice.grandTotal}
               />
+              {order.invoice.dealName && (
+                <p className="mt-1 rounded bg-violet-50 px-2 py-1 text-xs text-violet-900">
+                  {order.invoice.dealName}: saved {formatNpr(order.invoice.dealDiscount)} (included in Discount).
+                </p>
+              )}
               {(order.invoice.pointsEarned > 0 || order.invoice.pointsRedeemed > 0) && (
                 <p className="mt-2 text-sm text-stone-600">
                   {order.invoice.pointsRedeemed > 0 && <>Spent {order.invoice.pointsRedeemed} points. </>}
@@ -649,6 +654,11 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                 ]}
                 total={totals.grandTotal}
               />
+              {totals.deal && (
+                <p className="mt-1 rounded bg-violet-50 px-2 py-1 text-xs text-violet-900">
+                  {totals.deal.name} applied: saves {formatNpr(totals.deal.amount)} (included in Discount).
+                </p>
+              )}
               {totals.pointsToEarn > 0 && (
                 <p className="mt-1 text-xs text-green-800">The customer earns {totals.pointsToEarn} points on this bill.</p>
               )}

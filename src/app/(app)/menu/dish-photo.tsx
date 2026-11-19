@@ -7,7 +7,7 @@ import { removePhotoAction, uploadPhotoAction } from "./actions";
 const MAX_SIDE = 900;
 
 /** Shrinks a chosen picture in the browser (longest side 900 px, JPEG) so the upload is small and fast on any phone. */
-async function shrink(file: File): Promise<Blob> {
+export async function shrink(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));

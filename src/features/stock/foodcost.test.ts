@@ -21,6 +21,10 @@ describe("menu engineering", () => {
   it("cannot judge a dish with no recipe", () => {
     expect(by.Special).toMatchObject({ klass: "NO_RECIPE", cost: null, profit: null, costPercent: null });
   });
+  it("tells a missing recipe from missing ingredient prices", () => {
+    const r = analyse([{ menuItemId: "x", name: "X", quantity: 2, revenue: 400, unitCost: null, missingCost: true }]);
+    expect(r[0]!.klass).toBe("NO_COST");
+  });
   it("works out cost, profit and cost percent", () => {
     expect(by.Momo).toMatchObject({ cost: 800_000, profit: 1_700_000, costPercent: 32, profitEach: 17_000 });
   });

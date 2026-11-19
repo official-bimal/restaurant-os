@@ -45,6 +45,8 @@ export async function documentLines(
       buyerName: inv.buyerName,
       buyerPan: inv.buyerPan,
       copy: r.copy,
+      dealName: inv.dealName,
+      dealDiscount: inv.dealDiscount,
       orderNumber: r.orderNumber,
       when: fmtWhen(inv.createdAt, r.timezone),
       where: r.where,

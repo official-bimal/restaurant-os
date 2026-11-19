@@ -216,6 +216,9 @@ model Business {
   invoiceGaps      InvoiceGap[]
   accounts         Account[]
   fixedAssets      FixedAsset[]
+  hukkaSessions    HukkaSession[]
+  reservations     Reservation[]
+  deals            Deal[]
   budgets          Budget[]
   journalEntries   JournalEntry[]
   customerOsLink   CustomerOsLink?
@@ -427,13 +430,14 @@ model Order {
   createdAt              DateTime        @default(now())
   closedAt               DateTime?
 
-  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  table    DiningTable?   @relation(fields: [businessId, tableId], references: [businessId, id])
-  customer Customer?      @relation(fields: [businessId, customerId], references: [businessId, id])
-  batch    DeliveryBatch? @relation(fields: [batchId], references: [id])
-  items    OrderItem[]
-  invoice  Invoice?
-  branch   Branch         @relation(fields: [businessId, branchId], references: [businessId, id])
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  table         DiningTable?   @relation(fields: [businessId, tableId], references: [businessId, id])
+  customer      Customer?      @relation(fields: [businessId, customerId], references: [businessId, id])
+  batch         DeliveryBatch? @relation(fields: [batchId], references: [id])
+  items         OrderItem[]
+  invoice       Invoice?
+  hukkaSessions HukkaSession[]
+  branch        Branch         @relation(fields: [businessId, branchId], references: [businessId, id])
 
   @@unique([businessId, id])
   @@unique([businessId, number])
@@ -492,6 +496,9 @@ model Invoice {
   pointsEarned    Int       @default(0)
   pointsRedeemed  Int       @default(0)
   createdAt       DateTime  @default(now())
+  /// The automatic deal (happy hour, combo) applied to this bill, if any, and how much it took off. Already inside `discount`.
+  dealName        String?
+  dealDiscount    Int       @default(0)
   /// Set only on a bill made on a phone with no connection: its own key (so a repeat send is harmless), the phone it came from
   /// and when it reached the server. The invoice's date (createdAt) is when the sale really happened.
   offlineKey      String?
@@ -1090,51 +1097,53 @@ model Branch {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 
-  business          Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  areas             Area[]
-  tables            DiningTable[]
-  orders            Order[]
-  invoices          Invoice[]
-  dayCloses         DayClose[]
-  staffAccess       MembershipBranch[]
-  deliveryZones     DeliveryZone[]
-  deliveryBands     DeliveryBand[]
-  stockLevels       BranchStock[]
-  menuOverrides     BranchMenuItem[]
-  hiddenCategories  BranchCategoryHide[]
-  addOnOverrides    BranchAddOn[]
-  deliveryBatches   DeliveryBatch[]
-  stockMovements    StockMovement[]
-  purchaseOrders    PurchaseOrder[]
-  transfersOut      StockTransfer[]      @relation("TransferFrom")
-  transfersIn       StockTransfer[]      @relation("TransferTo")
-  menuSchedules     MenuSchedule[]
+  business            Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  areas               Area[]
+  tables              DiningTable[]
+  orders              Order[]
+  invoices            Invoice[]
+  dayCloses           DayClose[]
+  staffAccess         MembershipBranch[]
+  deliveryZones       DeliveryZone[]
+  deliveryBands       DeliveryBand[]
+  stockLevels         BranchStock[]
+  menuOverrides       BranchMenuItem[]
+  hiddenCategories    BranchCategoryHide[]
+  addOnOverrides      BranchAddOn[]
+  deliveryBatches     DeliveryBatch[]
+  stockMovements      StockMovement[]
+  purchaseOrders      PurchaseOrder[]
+  transfersOut        StockTransfer[]      @relation("TransferFrom")
+  transfersIn         StockTransfer[]      @relation("TransferTo")
+  menuSchedules       MenuSchedule[]
   /// Menu set chosen by hand for this branch. Null: follow the schedule, or the whole menu when none applies.
-  activeMenuSetId   String?
+  activeMenuSetId     String?
   /// Where the branch is, for automatic delivery distance and the in-app map.
-  latitude          Float?
-  longitude         Float?
+  latitude            Float?
+  longitude           Float?
   /// How close (metres) staff must be to the branch's location to clock in, when clocking by location is required.
-  clockRadiusMeters Int                  @default(150)
+  clockRadiusMeters   Int                  @default(150)
   /// Online ordering: customers order takeaway or delivery from a public page, paying at pickup or at the door.
-  onlineEnabled     Boolean              @default(false)
+  onlineEnabled       Boolean              @default(false)
+  /// Guests may ask for a table from the branch's public page.
+  reservationsEnabled Boolean              @default(false)
   /// The secret part of the public link (/o/<token>). Null until online ordering is first switched on.
-  onlineToken       String?              @unique
-  onlinePickup      Boolean              @default(true)
-  onlineDelivery    Boolean              @default(true)
+  onlineToken         String?              @unique
+  onlinePickup        Boolean              @default(true)
+  onlineDelivery      Boolean              @default(true)
   /// Smallest food total (paisa, before tax and charges) the branch will take online. 0 = no minimum.
-  onlineMinOrder    Int                  @default(0)
+  onlineMinOrder      Int                  @default(0)
   /// What customers are told to expect, in minutes.
-  onlinePrepMinutes Int                  @default(20)
+  onlinePrepMinutes   Int                  @default(20)
   /// A line shown at the top of the page ("Closed on Tuesdays", "Delivery until 8pm").
-  onlineNotice      String?
-  onlineOrders      OnlineOrder[]
+  onlineNotice        String?
+  onlineOrders        OnlineOrder[]
   /// Wi-Fi for guests, shown on the table QR page. Blank name = not shown.
-  wifiName          String?
-  wifiPassword      String?
+  wifiName            String?
+  wifiPassword        String?
   /// WPA (covers WPA2 and WPA3 passwords), WEP or nopass.
-  wifiSecurity      String               @default("WPA")
-  wifiHidden        Boolean              @default(false)
+  wifiSecurity        String               @default("WPA")
+  wifiHidden          Boolean              @default(false)
 
   @@unique([businessId, id])
   @@unique([businessId, name])
@@ -2159,4 +2168,116 @@ model Budget {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, fiscalYear, accountId])
+}
+
+// --- hukka timer, reservations, deals ---------------------------------------------------------------
+
+/// One hukka being smoked: when it started, how many extra coils, and when it ended. Made from a hukka item on an open order.
+model HukkaSession {
+  id           String    @id @default(cuid())
+  businessId   String
+  branchId     String
+  orderId      String
+  orderItemId  String
+  /// The dish name and table when it started, so the list still reads right after the order is paid.
+  name         String
+  tableLabel   String?
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  /// Extra coils added since it started (each is also put on the bill).
+  coils        Int       @default(0)
+  /// Minutes after which it is flagged as running long.
+  alertMinutes Int       @default(60)
+  startedById  String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  order    Order    @relation(fields: [businessId, orderId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, orderItemId])
+  @@index([businessId, branchId, endedAt])
+}
+
+enum ReservationStatus {
+  REQUESTED
+  CONFIRMED
+  SEATED
+  CANCELLED
+  NO_SHOW
+}
+
+model Reservation {
+  id          String            @id @default(cuid())
+  businessId  String
+  branchId    String
+  name        String
+  /// E.164.
+  phone       String
+  partySize   Int
+  /// YYYY-MM-DD, the branch's own date.
+  date        String
+  /// HH:MM, 24 hours.
+  time        String
+  tableId     String?
+  status      ReservationStatus @default(REQUESTED)
+  note        String?
+  /// "ONLINE" (the guest asked on the public page) or "STAFF".
+  source      String            @default("STAFF")
+  /// Lets the guest look at their own request without signing in.
+  token       String            @unique
+  createdById String?
+  createdAt   DateTime          @default(now())
+  confirmedAt DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, branchId, date])
+}
+
+enum DealKind {
+  /// A percentage off the chosen dishes, in a time window (happy hour).
+  PERCENT_OFF
+  /// A set price for a bundle (a coffee and a snack).
+  COMBO
+}
+
+/**
+ * An automatic deal. When a bill qualifies, the deal's discount is taken off by itself at the till; if several qualify, the one that saves
+ * the guest most applies (deals never stack). Days are 0 (Sunday) to 6, as a comma list; empty means every day. Times are minutes from midnight in
+ * the business's time zone; both empty means all day.
+ */
+model Deal {
+  id          String   @id @default(cuid())
+  businessId  String
+  /// Null: every branch.
+  branchId    String?
+  name        String
+  kind        DealKind
+  active      Boolean  @default(true)
+  days        String   @default("")
+  startMinute Int?
+  endMinute   Int?
+  /// PERCENT_OFF: basis points (2000 = 20%).
+  percentBps  Int      @default(0)
+  /// COMBO: the price of one bundle, in paisa.
+  comboPrice  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  business Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items    DealItem[]
+
+  @@unique([businessId, id])
+}
+
+/// A dish or a whole category a deal applies to. For a combo, `quantity` of them are needed in each bundle.
+model DealItem {
+  id         String  @id @default(cuid())
+  businessId String
+  dealId     String
+  menuItemId String?
+  categoryId String?
+  quantity   Int     @default(1)
+
+  deal Deal @relation(fields: [businessId, dealId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, dealId])
 }
