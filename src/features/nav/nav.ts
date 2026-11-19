@@ -57,10 +57,10 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
       id: "service",
       label: "Service",
       items: [
-        { href: "/orders", label: "Orders", icon: "orders", description: "Tables, takeaway and delivery orders", badge: c.guestWaiting },
+        ...when(can(r, "order.create") || can(r, "order.edit"), { href: "/orders", label: "Orders", icon: "orders", description: "Tables, takeaway and delivery orders", badge: c.guestWaiting }),
         ...when(can(r, "order.create") && can(r, "order.edit"), { href: "/quick", label: "Quick order", icon: "orders", description: "Fast counter sales, works with no internet" }),
         ...when(can(r, "order.edit"), { href: "/online", label: "Online orders", icon: "orders", description: "Orders customers placed from your link", badge: c.onlineWaiting, badgeTone: "alert" }),
-        { href: "/kitchen", label: "Kitchen", icon: "kitchen", description: "Tickets for the kitchen and bar" },
+        ...when(can(r, "kitchen.update") || can(r, "order.edit"), { href: "/kitchen", label: "Kitchen", icon: "kitchen", description: "Tickets for the kitchen and bar" }),
         ...when(can(r, "order.edit"), { href: "/reservations", label: "Reservations", icon: "tables", description: "Table bookings", badge: c.reservationsWaiting, badgeTone: "alert" }),
         ...when(can(r, "order.edit") && i.hukka, { href: "/hukka", label: "Hukka timer", icon: "clock", description: "Time each hukka and count coils", badge: c.hukkaLong, badgeTone: "alert" }),
         ...when(can(r, "order.edit"), { href: "/dispatch", label: "Dispatch", icon: "truck", description: "Give deliveries to riders" }),
@@ -93,6 +93,7 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
       items: [
         ...when(can(r, "report.view"), { href: "/reports", label: "Reports", icon: "reports", description: "Daily sales and closing the day" }),
         ...when(can(r, "bills.view"), { href: "/bills", label: "Bills", icon: "bills", description: "Paid bills, reprints and refunds" }),
+        ...when(can(r, "drawer.use") || can(r, "drawer.review"), { href: "/drawer", label: "Cash drawer", icon: "bills", description: "Float, cash in and out, and the count at handover" }),
         ...when(can(r, "books.view"), { href: "/accounting", label: "Accounts", icon: "reports", description: "Books, VAT and reports for your accountant" }),
       ],
     },
@@ -101,7 +102,9 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
       label: "Team",
       items: [
         ...when(can(r, "staff.manage"), { href: "/staff", label: "Staff", icon: "staff", description: "People, roles and logins" }),
-        { href: "/time", label: "My time", icon: "clock", description: "Clock in and out" },
+        ...when(r !== "ACCOUNTANT", { href: "/time", label: "My time", icon: "clock", description: "Clock in and out" }),
+        ...when(r !== "ACCOUNTANT", { href: "/roster", label: can(r, "time.manage") ? "Roster" : "My shifts", icon: "clock", description: can(r, "time.manage") ? "Who works when" : "When you work" }),
+        ...when(can(r, "drawer.use") || can(r, "payroll.manage"), { href: "/tips", label: "Tips", icon: "feedback", description: "Record tips and share them out" }),
         ...when(can(r, "time.manage"), { href: "/attendance", label: "Attendance", icon: "staff", description: "Who is in today" }),
         ...when(can(r, "payroll.manage"), { href: "/payroll", label: "Payroll", icon: "bills", description: "Pay for hours worked" }),
       ],

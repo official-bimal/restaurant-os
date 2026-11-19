@@ -14,7 +14,7 @@ import {
 } from "@/features/staff/server/service";
 
 const BACK = "/staff";
-const roleSchema = z.enum(["OWNER", "MANAGER", "CASHIER", "WAITER", "KITCHEN", "RIDER"]);
+const roleSchema = z.enum(["OWNER", "MANAGER", "CASHIER", "WAITER", "KITCHEN", "RIDER", "ACCOUNTANT"]);
 
 /**
  * State returned to the form. The temporary password only ever travels in this

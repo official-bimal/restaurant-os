@@ -105,9 +105,11 @@ export default async function DashboardPage() {
               Quick order
             </Link>
           )}
-          <Link href="/kitchen" className="btn-secondary">
-            Kitchen
-          </Link>
+          {(can(ctx.role, "kitchen.update") || can(ctx.role, "order.edit")) && (
+            <Link href="/kitchen" className="btn-secondary">
+              Kitchen
+            </Link>
+          )}
         </div>
       </header>
 

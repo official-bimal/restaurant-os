@@ -55,7 +55,13 @@ const GROUPS: Group[] = [
       { href: "/accounting/year-end", label: "Year-end" },
     ],
   },
-  { label: "", items: [{ href: "/accounting/audit-log", label: "Audit log" }] },
+  {
+    label: "",
+    items: [
+      { href: "/accounting/exports", label: "Downloads (CSV)" },
+      { href: "/accounting/audit-log", label: "Audit log" },
+    ],
+  },
 ];
 
 /** The Accounts menu: a list down the side on a computer, a row you can slide along on a phone. */

@@ -25,6 +25,7 @@ export const DEFAULT_CHART: readonly DefaultAccount[] = [
   { code: "2100", name: "VAT collected on sales (output VAT)", type: "LIABILITY", key: "VAT_OUTPUT" },
   { code: "2200", name: "TDS payable", type: "LIABILITY", key: "TDS_PAYABLE" },
   { code: "2300", name: "Salaries payable", type: "LIABILITY", key: "SALARY_PAYABLE" },
+  { code: "2350", name: "Tips held for staff", type: "LIABILITY", key: "TIPS_PAYABLE" },
   { code: "2400", name: "Loans", type: "LIABILITY" },
   { code: "3010", name: "Owner's capital", type: "EQUITY", key: "CAPITAL" },
   { code: "3020", name: "Owner's drawings", type: "EQUITY", key: "DRAWINGS" },
@@ -33,7 +34,7 @@ export const DEFAULT_CHART: readonly DefaultAccount[] = [
   { code: "4020", name: "Service charge income", type: "INCOME", key: "SERVICE_CHARGE" },
   { code: "4030", name: "Delivery fee income", type: "INCOME", key: "DELIVERY" },
   { code: "4090", name: "Sales returns (refunds)", type: "INCOME", key: "SALES_RETURNS" },
-  { code: "4900", name: "Other income", type: "INCOME" },
+  { code: "4900", name: "Other income", type: "INCOME", key: "OTHER_INCOME" },
   { code: "4950", name: "Rounding differences", type: "INCOME", key: "ROUND_OFF" },
   { code: "5010", name: "Purchases (food and drink)", type: "EXPENSE", key: "PURCHASES" },
   { code: "5020", name: "Stock wasted", type: "EXPENSE", key: "WASTE" },
@@ -43,8 +44,9 @@ export const DEFAULT_CHART: readonly DefaultAccount[] = [
   { code: "5400", name: "Repairs and maintenance", type: "EXPENSE" },
   { code: "5500", name: "Marketing", type: "EXPENSE" },
   { code: "5600", name: "Bank and card charges", type: "EXPENSE" },
+  { code: "5650", name: "Cash over and short", type: "EXPENSE", key: "CASH_DIFF" },
   { code: "5700", name: "Depreciation", type: "EXPENSE", key: "DEPRECIATION" },
-  { code: "5900", name: "Other expenses", type: "EXPENSE" },
+  { code: "5900", name: "Other expenses", type: "EXPENSE", key: "OTHER_EXPENSE" },
 ];
 
 export const ACCOUNT_TYPES: readonly AccountType[] = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];

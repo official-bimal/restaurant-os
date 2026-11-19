@@ -120,7 +120,8 @@ export async function getEasyOptions(ctx: TenantContext) {
   await ensureChart(ctx.businessId);
   const [money, income, expense] = await Promise.all([
     listMoneyAccounts(ctx),
-    db.account.findMany({ where: { businessId: ctx.businessId, type: "INCOME", active: true, key: null }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
+    // The accounts the till posts sales to are not for typing income into; every other income account is.
+    db.account.findMany({ where: { businessId: ctx.businessId, type: "INCOME", active: true, OR: [{ key: null }, { key: { notIn: ["SALES", "SERVICE_CHARGE", "DELIVERY", "SALES_RETURNS", "ROUND_OFF"] } }] }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
     db.account.findMany({ where: { businessId: ctx.businessId, type: "EXPENSE", active: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
   ]);
   const today = localDate(new Date(), (await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { timezone: true } })).timezone);

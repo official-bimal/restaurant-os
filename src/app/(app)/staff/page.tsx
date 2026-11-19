@@ -16,6 +16,7 @@ const LABEL: Record<string, string> = {
   WAITER: "Waiter",
   KITCHEN: "Kitchen",
   RIDER: "Rider",
+  ACCOUNTANT: "Accountant",
 };
 
 export default async function StaffPage({ searchParams }: PageProps<"/staff">) {

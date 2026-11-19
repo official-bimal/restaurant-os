@@ -34,14 +34,18 @@ export type Permission =
   | "print.manage"
   | "books.view"
   | "books.manage"
+  | "drawer.use"
+  | "drawer.review"
   | "owner.control";
 
 const MATRIX: Record<Role, readonly Permission[]> = {
-  OWNER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "day.reopen", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "branch.manage", "rider.settle", "supplier.pay", "time.manage", "payroll.manage", "message.send", "print.manage", "books.view", "books.manage", "owner.control"],
-  MANAGER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "rider.settle", "supplier.pay", "time.manage", "print.manage", "books.view"],
-  CASHIER: ["order.create", "order.edit", "bill.checkout", "customer.use", "order.restructure", "bills.view", "rider.settle"],
+  OWNER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "day.reopen", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "branch.manage", "rider.settle", "supplier.pay", "time.manage", "payroll.manage", "message.send", "print.manage", "books.view", "books.manage", "drawer.use", "drawer.review", "owner.control"],
+  MANAGER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "rider.settle", "supplier.pay", "time.manage", "print.manage", "books.view", "drawer.use", "drawer.review"],
+  CASHIER: ["order.create", "order.edit", "bill.checkout", "customer.use", "order.restructure", "bills.view", "rider.settle", "drawer.use"],
   WAITER: ["order.create", "order.edit"],
   KITCHEN: ["kitchen.update", "stock.view", "stock.waste"],
+  // An accountant reads the books, bills and reports and downloads them; nothing else, and nothing can be changed.
+  ACCOUNTANT: ["report.view", "bills.view", "books.view"],
   // A rider sees only the deliveries assigned to them, through their own page.
   RIDER: ["delivery.ride"],
 };
@@ -50,7 +54,7 @@ export function can(role: Role, permission: Permission): boolean {
   return MATRIX[role].includes(permission);
 }
 
-const ROLE_RANK: Record<Role, number> = { OWNER: 4, MANAGER: 3, CASHIER: 2, WAITER: 1, KITCHEN: 0, RIDER: 0 };
+const ROLE_RANK: Record<Role, number> = { OWNER: 4, MANAGER: 3, CASHIER: 2, WAITER: 1, KITCHEN: 0, RIDER: 0, ACCOUNTANT: 0 };
 
 /**
  * Who may create, change or remove whom. Owners manage everyone; managers manage

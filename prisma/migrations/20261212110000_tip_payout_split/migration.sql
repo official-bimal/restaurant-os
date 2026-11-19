@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "TipPayout" ADD COLUMN     "serviceAmount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "tipsAmount" INTEGER NOT NULL DEFAULT 0;
+

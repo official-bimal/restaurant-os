@@ -96,6 +96,9 @@ export default async function MenuPage({ searchParams }: PageProps<"/menu">) {
         <Link href="/menu/photos" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
           Add many photos at once
         </Link>
+        <Link href="/menu/import" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
+          Spreadsheet (import / export)
+        </Link>
       </div>
       <MenuTabs current="dishes" />
 

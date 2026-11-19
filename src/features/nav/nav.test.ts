@@ -33,6 +33,11 @@ describe("navigation", () => {
     expect(hrefs("KITCHEN")).toEqual(expect.arrayContaining(["/kitchen", "/stock"]));
     expect(hrefs("KITCHEN")).not.toContain("/orders/new");
   });
+  it("shows an accountant the books, bills and reports and nothing to run the floor", () => {
+    const h = hrefs("ACCOUNTANT");
+    expect(h).toEqual(expect.arrayContaining(["/dashboard", "/accounting", "/reports", "/bills"]));
+    for (const p of ["/orders", "/kitchen", "/menu", "/stock", "/staff", "/time", "/settings", "/owner"]) expect(h).not.toContain(p);
+  });
   it("carries the badge counts", () => {
     const n = buildNav({ role: "OWNER", ...base, counts: { onlineWaiting: 3, lowStock: 2, notifications: 5 } });
     const all = [...n.home, ...n.sections.flatMap((s) => s.items)];

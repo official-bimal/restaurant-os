@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balanced, refundLines, saleLines, supplierBillLines, supplierPaymentLines } from "./postings";
+import { balanced, drawerDiffLines, drawerMoveLines, refundLines, saleLines, supplierBillLines, supplierPaymentLines, tipLines, tipPayoutLines } from "./postings";
 import { balanceSheet, ledger, profitAndLoss, trialBalance, type AccountInfo, type PostedLine } from "./books";
 
 describe("postings", () => {
@@ -36,6 +36,25 @@ describe("postings", () => {
     expect(withTds.find((x) => x.key === "PAYABLE")!.credit).toBe(9_000);
     expect(withTds.find((x) => x.key === "TDS_PAYABLE")!.credit).toBe(1_000);
     expect(supplierPaymentLines(5_000, "CHEQUE").find((x) => x.credit)!.key).toBe("BANK");
+  });
+});
+
+describe("drawer and tip postings", () => {
+  it("every kind of cash move balances and goes to the right account", () => {
+    for (const k of ["BANK_DEPOSIT", "PETTY_EXPENSE", "OWNER_TAKES", "OWNER_ADDS", "OTHER_IN", "OTHER_OUT"]) expect(balanced(drawerMoveLines(k, 5_000))).toBe(true);
+    expect(drawerMoveLines("BANK_DEPOSIT", 5_000).map((l) => l.key)).toEqual(["BANK", "CASH"]);
+    expect(drawerMoveLines("OWNER_ADDS", 5_000).map((l) => l.key)).toEqual(["CASH", "CAPITAL"]);
+    expect(drawerMoveLines("PETTY_EXPENSE", 5_000)[0]!.key).toBe("OTHER_EXPENSE");
+  });
+  it("a short count takes cash down to the real count, and an over count raises it", () => {
+    expect(drawerDiffLines(-300)).toEqual([{ key: "CASH_DIFF", debit: 300, credit: 0 }, { key: "CASH", debit: 0, credit: 300 }]);
+    expect(drawerDiffLines(200)).toEqual([{ key: "CASH", debit: 200, credit: 0 }, { key: "CASH_DIFF", debit: 0, credit: 200 }]);
+    expect(drawerDiffLines(0)).toEqual([]);
+  });
+  it("tips are owed to staff, and sharing them out offsets the wages expense", () => {
+    expect(tipLines(1_000, "QR")).toEqual([{ key: "WALLET", debit: 1_000, credit: 0 }, { key: "TIPS_PAYABLE", debit: 0, credit: 1_000 }]);
+    expect(balanced(tipLines(1_000, "CARD"))).toBe(true);
+    expect(tipPayoutLines(900)).toEqual([{ key: "TIPS_PAYABLE", debit: 900, credit: 0 }, { key: "SALARIES", debit: 0, credit: 900 }]);
   });
 });
 

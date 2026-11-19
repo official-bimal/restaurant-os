@@ -121,6 +121,41 @@ export function salaryPaidLines(amount: number, how: string): Line[] {
   ]);
 }
 
+/** Cash moved in or out of the drawer by the cashier: where the other side goes depends on why. */
+export function drawerMoveLines(kind: string, amount: number): Line[] {
+  switch (kind) {
+    case "BANK_DEPOSIT":
+      return tidy([{ key: "BANK", debit: amount, credit: 0 }, { key: "CASH", debit: 0, credit: amount }]);
+    case "OWNER_TAKES":
+      return tidy([{ key: "DRAWINGS", debit: amount, credit: 0 }, { key: "CASH", debit: 0, credit: amount }]);
+    case "OWNER_ADDS":
+      return tidy([{ key: "CASH", debit: amount, credit: 0 }, { key: "CAPITAL", debit: 0, credit: amount }]);
+    case "OTHER_IN":
+      return tidy([{ key: "CASH", debit: amount, credit: 0 }, { key: "OTHER_INCOME", debit: 0, credit: amount }]);
+    default:
+      return tidy([{ key: "OTHER_EXPENSE", debit: amount, credit: 0 }, { key: "CASH", debit: 0, credit: amount }]);
+  }
+}
+
+/** Cash found short or over at the count: the books are brought to the real count and the difference is kept in its own account. */
+export function drawerDiffLines(diff: number): Line[] {
+  return diff < 0
+    ? tidy([{ key: "CASH_DIFF", debit: -diff, credit: 0 }, { key: "CASH", debit: 0, credit: -diff }])
+    : tidy([{ key: "CASH", debit: diff, credit: 0 }, { key: "CASH_DIFF", debit: 0, credit: diff }]);
+}
+
+const TIP_MONEY: Record<string, string> = { CASH: "CASH", CARD: "CARD", QR: "WALLET" };
+
+/** A tip taken from a customer: money in, owed to staff (not the business income). */
+export function tipLines(amount: number, method: string): Line[] {
+  return tidy([{ key: TIP_MONEY[method] ?? "CASH", debit: amount, credit: 0 }, { key: "TIPS_PAYABLE", debit: 0, credit: amount }]);
+}
+
+/** Tips shared out through payroll: the wages expense payroll will book for them is offset, so the business is not charged for staff money. */
+export function tipPayoutLines(total: number): Line[] {
+  return tidy([{ key: "TIPS_PAYABLE", debit: total, credit: 0 }, { key: "SALARIES", debit: 0, credit: total }]);
+}
+
 export function balanced(lines: { debit: number; credit: number }[]): boolean {
   return lines.reduce((n, l) => n + l.debit - l.credit, 0) === 0;
 }

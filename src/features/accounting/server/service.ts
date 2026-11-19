@@ -6,7 +6,8 @@ import { audit, type Tx } from "@/server/audit";
 import { addDays, isValidDate, localDate } from "@/lib/business-day";
 import { DEFAULT_CHART, ACCOUNT_TYPES, type AccountType } from "../chart";
 import { fiscalYearOf, fiscalYearRange } from "../fiscal";
-import { refundLines, saleLines, supplierBillLines, supplierPaymentLines, payrollLines, salaryPaidLines, balanced, type Line } from "../postings";
+import { refundLines, saleLines, supplierBillLines, supplierPaymentLines, payrollLines, salaryPaidLines, drawerMoveLines, drawerDiffLines, tipLines, tipPayoutLines, balanced, type Line } from "../postings";
+import { MOVE_LABEL, type MoveKind } from "@/features/drawer/drawer";
 import { balanceSheet, ledger, profitAndLoss, trialBalance, type AccountInfo, type PostedLine } from "../books";
 
 /**
@@ -305,6 +306,84 @@ export async function syncPostings(businessId: string): Promise<number> {
           sourceKind: "SALARY_PAID",
           sourceId: l.id,
           lines: resolve(keys, salaryPaidLines(l.netPay, l.paidMethod ?? "")),
+        });
+        return 1;
+      }).catch(ignoreDuplicate);
+    }
+
+    // Cash moved in or out of the drawer, and the difference found when it was counted.
+    for (const id of await unposted("CashMovement", "DRAWER_MOVE", "createdAt")) {
+      did += await db.$transaction(async (tx) => {
+        const m = await tx.cashMovement.findFirst({ where: { id, businessId }, include: { shift: { select: { branchId: true } } } });
+        if (!m) return 0;
+        const keys = await keyMap(tx, businessId);
+        await writeEntry(tx, {
+          businessId,
+          branchId: m.shift.branchId,
+          date: localDate(m.createdAt, biz.timezone),
+          voucher: "DRAWER",
+          narration: `${MOVE_LABEL[m.kind as MoveKind]}: ${m.reason}`.slice(0, 200),
+          sourceKind: "DRAWER_MOVE",
+          sourceId: m.id,
+          lines: resolve(keys, drawerMoveLines(m.kind, m.amount)),
+        });
+        return 1;
+      }).catch(ignoreDuplicate);
+    }
+
+    for (const id of await unposted("CashShift", "DRAWER_DIFF", "closedAt", `AND t."closedAt" IS NOT NULL AND t."difference" IS NOT NULL AND t."difference" <> 0`)) {
+      did += await db.$transaction(async (tx) => {
+        const s = await tx.cashShift.findFirst({ where: { id, businessId } });
+        if (!s || !s.closedAt || !s.difference) return 0;
+        const keys = await keyMap(tx, businessId);
+        await writeEntry(tx, {
+          businessId,
+          branchId: s.branchId,
+          date: localDate(s.closedAt, biz.timezone),
+          voucher: "DRAWER",
+          narration: `Cash count at handover: ${s.difference < 0 ? "short" : "over"} by ${(Math.abs(s.difference) / 100).toFixed(2)}${s.note ? `. ${s.note}` : ""}`.slice(0, 200),
+          sourceKind: "DRAWER_DIFF",
+          sourceId: s.id,
+          lines: resolve(keys, drawerDiffLines(s.difference)),
+        });
+        return 1;
+      }).catch(ignoreDuplicate);
+    }
+
+    // Tips taken from customers, and tips shared out through payroll.
+    for (const id of await unposted("TipEntry", "TIP", "createdAt")) {
+      did += await db.$transaction(async (tx) => {
+        const t = await tx.tipEntry.findFirst({ where: { id, businessId } });
+        if (!t) return 0;
+        const keys = await keyMap(tx, businessId);
+        await writeEntry(tx, {
+          businessId,
+          branchId: t.branchId,
+          date: t.date,
+          voucher: "TIP",
+          narration: `Tip received (${t.method.toLowerCase()})${t.note ? `: ${t.note}` : ""}`.slice(0, 200),
+          sourceKind: "TIP",
+          sourceId: t.id,
+          lines: resolve(keys, tipLines(t.amount, t.method)),
+        });
+        return 1;
+      }).catch(ignoreDuplicate);
+    }
+
+    for (const id of await unposted("TipPayout", "TIP_PAYOUT", "createdAt", `AND t."tipsAmount" > 0`)) {
+      did += await db.$transaction(async (tx) => {
+        const p = await tx.tipPayout.findFirst({ where: { id, businessId } });
+        if (!p) return 0;
+        const keys = await keyMap(tx, businessId);
+        await writeEntry(tx, {
+          businessId,
+          branchId: p.branchId,
+          date: localDate(p.createdAt, biz.timezone),
+          voucher: "TIP",
+          narration: `Tips shared out through payroll, ${p.fromDate} to ${p.toDate}`,
+          sourceKind: "TIP_PAYOUT",
+          sourceId: p.id,
+          lines: resolve(keys, tipPayoutLines(p.tipsAmount)),
         });
         return 1;
       }).catch(ignoreDuplicate);

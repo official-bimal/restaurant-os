@@ -13,7 +13,7 @@ import type { Role } from "@/generated/prisma/enums";
  * nobody manages their own account here, and the last owner can never be lost.
  */
 
-export const ROLES: readonly Role[] = ["OWNER", "MANAGER", "CASHIER", "WAITER", "KITCHEN", "RIDER"];
+export const ROLES: readonly Role[] = ["OWNER", "MANAGER", "CASHIER", "WAITER", "KITCHEN", "RIDER", "ACCOUNTANT"];
 
 function cleanName(value: string): string {
   const name = value.trim().replace(/\s+/g, " ");

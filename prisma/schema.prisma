@@ -18,6 +18,8 @@ enum Role {
   CASHIER
   WAITER
   KITCHEN
+  /// Reads the books and reports and downloads them; changes nothing.
+  ACCOUNTANT
   /// Delivers orders. Sees only the deliveries assigned to them.
   RIDER
 }
@@ -224,6 +226,10 @@ model Business {
   stampPrograms    StampProgram[]
   paymentSettings  PaymentSetting[]
   paymentIntents   PaymentIntent[]
+  cashShifts       CashShift[]
+  rosterShifts     RosterShift[]
+  tipEntries       TipEntry[]
+  tipPayouts       TipPayout[]
   budgets          Budget[]
   journalEntries   JournalEntry[]
   customerOsLink   CustomerOsLink?
@@ -2439,4 +2445,139 @@ model PaymentIntent {
 
   @@index([businessId, orderId])
   @@index([businessId, status])
+}
+
+// --- cash drawer, roster and tips --------------------------------------------------------------------
+
+enum DrawerMoveKind {
+  BANK_DEPOSIT
+  PETTY_EXPENSE
+  OWNER_TAKES
+  OWNER_ADDS
+  OTHER_IN
+  OTHER_OUT
+}
+
+/**
+ * One stretch of the cash drawer, from opening it with a float to counting it at handover. Only one is open per branch at a time (`openKey`
+ * holds the branch id while open and is null once closed, and is unique). At close, the count is compared with what the drawer should hold.
+ */
+model CashShift {
+  id           String    @id @default(cuid())
+  businessId   String
+  branchId     String
+  /// The branch id while the shift is open; null once closed. Unique: one open drawer shift per branch.
+  openKey      String?
+  openedById   String
+  openedAt     DateTime  @default(now())
+  /// The float put in the drawer, in paisa.
+  openingFloat Int
+  closedAt     DateTime?
+  closedById   String?
+  /// What was counted at close, what it should have been, and the difference (negative: short).
+  countedCash  Int?
+  expectedCash Int?
+  difference   Int?
+  note         String?
+
+  business  Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  movements CashMovement[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, openKey])
+  @@index([businessId, branchId, openedAt])
+}
+
+/// Cash put in or taken out of the drawer during a shift, with the reason.
+model CashMovement {
+  id          String         @id @default(cuid())
+  businessId  String
+  shiftId     String
+  kind        DrawerMoveKind
+  /// Paisa, always positive; the kind says which way it went.
+  amount      Int
+  reason      String
+  createdById String
+  createdAt   DateTime       @default(now())
+
+  shift CashShift @relation(fields: [businessId, shiftId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, shiftId])
+}
+
+/// Who works when: one row per person per shift. Times are the branch's own, HH:MM.
+model RosterShift {
+  id         String   @id @default(cuid())
+  businessId String
+  branchId   String
+  userId     String
+  /// YYYY-MM-DD
+  date       String
+  startTime  String
+  endTime    String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId, date, startTime])
+  @@index([businessId, branchId, date])
+}
+
+/// Tips collected from customers. They belong to staff, not to the business, until paid out.
+model TipEntry {
+  id          String        @id @default(cuid())
+  businessId  String
+  branchId    String
+  /// YYYY-MM-DD
+  date        String
+  amount      Int
+  method      PaymentMethod
+  note        String?
+  createdById String
+  createdAt   DateTime      @default(now())
+  /// Set once the tip has been shared out.
+  payoutId    String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, branchId, date])
+}
+
+/// One sharing-out of tips (and a share of the service charge) among staff, by hours worked or equally.
+model TipPayout {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String
+  fromDate      String
+  toDate        String
+  /// Everything shared: tips plus any service charge added to the pool.
+  pooled        Int
+  /// The tips part of it (owed to staff, held until now) and the service charge part (already the business income, now paid as wages).
+  tipsAmount    Int      @default(0)
+  serviceAmount Int      @default(0)
+  basis         String
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines    TipPayoutLine[]
+
+  @@unique([businessId, id])
+}
+
+model TipPayoutLine {
+  id           String  @id @default(cuid())
+  businessId   String
+  payoutId     String
+  userId       String
+  name         String
+  minutes      Int
+  amount       Int
+  /// The payroll adjustment it was added as.
+  adjustmentId String?
+
+  payout TipPayout @relation(fields: [businessId, payoutId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, payoutId])
 }

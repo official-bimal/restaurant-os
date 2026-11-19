@@ -32,6 +32,7 @@ const ROLE_LABEL: Record<string, string> = {
   WAITER: "Waiter",
   KITCHEN: "Kitchen",
   RIDER: "Rider",
+  ACCOUNTANT: "Accountant",
 };
 
 function initials(name: string) {
@@ -82,6 +83,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     CASHIER: ["/orders", "/quick", "/kitchen", "/notifications"],
     WAITER: ["/orders", "/quick", "/kitchen", "/notifications"],
     KITCHEN: ["/kitchen", "/notifications", "/stock"],
+    ACCOUNTANT: ["/dashboard", "/accounting", "/reports", "/bills"],
   };
   const everyItem: NavItem[] = [...home, ...sections.flatMap((g) => g.items)].map((e) => ({ href: e.href, label: e.label, icon: e.icon, tone: "teal" as const, badge: e.badge, badgeTone: e.badgeTone }));
   const tabs = (PREFERRED[ctx.role] ?? PREFERRED.WAITER!).flatMap((href) => everyItem.filter((i) => i.href === href)).slice(0, 4);
