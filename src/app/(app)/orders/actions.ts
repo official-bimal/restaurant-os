@@ -163,10 +163,14 @@ export async function checkoutAction(orderId: string, formData: FormData) {
   if (rewardId) params.set("reward", rewardId);
   const freeItemId = String(formData.get("freeItemId") || "").slice(0, 100) || undefined;
   if (rewardId && freeItemId) params.set("free", freeItemId);
+  const stampProgramId = String(formData.get("stampProgramId") || "").slice(0, 100) || undefined;
+  const stampItemId = String(formData.get("stampItemId") || "").slice(0, 100) || undefined;
+  if (stampProgramId) params.set("stamp", stampProgramId);
+  if (stampProgramId && stampItemId) params.set("stampItem", stampItemId);
   const back = params.size ? `/orders/${orderId}?${params}` : `/orders/${orderId}`;
   const buyerName = String(formData.get("buyerName") || "").slice(0, 200);
   const buyerPan = String(formData.get("buyerPan") || "").slice(0, 30);
-  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints, rewardId, freeItemId, buyerName, buyerPan }));
+  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints, rewardId, freeItemId, buyerName, buyerPan, stampProgramId, stampItemId }));
   revalidatePath("/orders", "layout");
   redirect(`/orders/${orderId}`);
 }

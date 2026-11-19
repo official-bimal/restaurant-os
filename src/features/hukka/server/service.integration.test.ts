@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import type { TenantContext } from "@/server/auth";
 import { createOrder, addItem, previewBill, checkout } from "@/features/orders/server/service";
-import { addCoil, finishHukka, getHukkaBoard, hukkaAlertCount, startHukka } from "./service";
+import { addCoil, finishHukka, getHukkaBoard, hukkaAlertCount, listRunningHukkas, startHukka } from "./service";
 
 const stamp = Date.now();
 let n = 0;
@@ -96,5 +96,17 @@ describe("hukka timer", () => {
     await getHukkaBoard(owner);
     expect((await db.hukkaSession.findFirstOrThrow({ where: { id: s.id } })).endedAt).not.toBeNull();
     await expect(getHukkaBoard(kitchen)).rejects.toThrow(/permission/);
+  });
+
+  it("the kitchen can see what is running (read only), nobody else outside the floor can", async () => {
+    const o = await openOrder();
+    const item = (await db.orderItem.findMany({ where: { orderId: o.id } })).find((i) => i.menuItemId === mint)!;
+    const s = await startHukka(owner, item.id);
+    const seen = await listRunningHukkas(kitchen);
+    expect(seen.map((x) => x.id)).toContain(s.id);
+    const rider = { ...kitchen, role: "RIDER" as const };
+    await expect(listRunningHukkas(rider)).rejects.toThrow(/permission/);
+    await finishHukka(owner, s.id);
+    expect((await listRunningHukkas(kitchen)).map((x) => x.id)).not.toContain(s.id);
   });
 });

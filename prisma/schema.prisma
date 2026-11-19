@@ -219,6 +219,7 @@ model Business {
   hukkaSessions    HukkaSession[]
   reservations     Reservation[]
   deals            Deal[]
+  stampPrograms    StampProgram[]
   budgets          Budget[]
   journalEntries   JournalEntry[]
   customerOsLink   CustomerOsLink?
@@ -2291,4 +2292,58 @@ model DealItem {
   deal Deal @relation(fields: [businessId, dealId], references: [businessId, id], onDelete: Cascade)
 
   @@index([businessId, dealId])
+}
+
+// --- stamp cards -------------------------------------------------------------------------------------
+
+/**
+ * A stamp card: every qualifying dish a customer buys is one stamp, and each `target` stamps earns one free dish from the programme
+ * (for example the tenth coffee free). Stamps are counted from the customer's paid bills, so there is no counter to get out of step;
+ * what has been used is the StampRedemption rows.
+ */
+model StampProgram {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  /// Stamps needed for one free dish.
+  target     Int
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business    Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items       StampProgramItem[]
+  redemptions StampRedemption[]
+
+  @@unique([businessId, id])
+}
+
+/// A dish or a whole category that earns stamps (and can be the free one).
+model StampProgramItem {
+  id         String  @id @default(cuid())
+  businessId String
+  programId  String
+  menuItemId String?
+  categoryId String?
+
+  program StampProgram @relation(fields: [businessId, programId], references: [businessId, id], onDelete: Cascade)
+
+  @@index([businessId, programId])
+}
+
+/// One free dish given on a bill.
+model StampRedemption {
+  id         String   @id @default(cuid())
+  businessId String
+  programId  String
+  customerId String
+  invoiceId  String
+  /// What the free dish was worth, in paisa (already inside the bill's reward discount).
+  valueMinor Int
+  itemName   String
+  createdAt  DateTime @default(now())
+
+  program StampProgram @relation(fields: [businessId, programId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, invoiceId, programId])
+  @@index([businessId, customerId, programId])
 }

@@ -74,6 +74,14 @@ export default async function OwnerPage({ searchParams }: PageProps<"/owner">) {
         <section className="card p-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <h2 className="mr-auto font-semibold">Daily summary</h2>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(summary.short)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="min-h-9 rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium hover:bg-stone-50"
+            >
+              Share on WhatsApp
+            </a>
             {date === today && (
               <form action={sendSummaryNowAction}>
                 <button className="min-h-9 rounded-lg border border-stone-300 px-3 text-sm font-medium hover:bg-stone-50">Send me this now</button>

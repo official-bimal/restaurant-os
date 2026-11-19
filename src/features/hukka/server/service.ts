@@ -105,3 +105,11 @@ export async function hukkaAlertCount(ctx: TenantContext): Promise<number> {
   const now = Date.now();
   return rows.filter((r) => (now - r.startedAt.getTime()) / 60_000 >= r.alertMinutes).length;
 }
+
+/** The hukkas running now, for the kitchen or bar screen. Kitchen staff may see them as well as people who handle orders. */
+export async function listRunningHukkas(ctx: TenantContext) {
+  if (!can(ctx.role, "order.edit") && !can(ctx.role, "kitchen.update")) throw new DomainError("You do not have permission to see hukkas.");
+  const { businessId, branchId } = scope(ctx);
+  await closeFinished(businessId, branchId);
+  return db.hukkaSession.findMany({ where: { businessId, branchId, endedAt: null }, orderBy: { startedAt: "asc" }, select: { id: true, name: true, tableLabel: true, startedAt: true, alertMinutes: true, coils: true } });
+}

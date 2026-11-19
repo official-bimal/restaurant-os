@@ -98,6 +98,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       items: [
         ...(can(ctx.role, "customer.manage") ? [{ href: "/customers", label: "Customers", icon: "customers", tone: "pink" as const }] : []),
         ...(can(ctx.role, "campaign.manage") ? [{ href: "/campaigns", label: "Campaigns", icon: "campaigns", tone: "violet" as const }] : []),
+        ...(can(ctx.role, "campaign.manage") ? [{ href: "/stamps", label: "Stamp cards", icon: "campaigns", tone: "amber" as const }] : []),
         ...(can(ctx.role, "feedback.view")
           ? [{ href: "/feedback", label: "Feedback", icon: "feedback", tone: "amber" as const, badge: lowRatings, badgeTone: "alert" as const }]
           : []),

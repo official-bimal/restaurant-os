@@ -1,4 +1,5 @@
 import { queuePrintAction } from "../../printing/actions";
+import { getStampOptions } from "@/features/loyalty/server/stamps";
 import { PrintMenu } from "@/components/print-menu";
 import { OrderMenu } from "./order-menu";
 import { CustomerOsPoints } from "@/features/customeros/points";
@@ -72,11 +73,15 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   const liveItems = order.items.filter((i) => i.status !== "CANCELLED" && !i.complimentary && i.unitPrice > 0);
   const freeItem = chosenReward?.type === "FREE_ITEM" ? (liveItems.find((i) => i.id === query.free) ?? liveItems[0] ?? null) : null;
   const rewardValue = chosenReward ? (chosenReward.type === "FREE_ITEM" ? (freeItem?.unitPrice ?? 0) : (chosenReward.valueMinor ?? 0)) : 0;
+  // Stamp cards: the customer's cards, and a full one can give a free dish from the order.
+  const stampOptions = !order.invoice && hasActive && loyalty?.customer && loyalty.confirmed ? await getStampOptions(ctx, id) : null;
+  const chosenStamp = stampOptions?.programs.find((p) => p.programId === query.stamp && p.card.available > 0 && p.eligible.length > 0) ?? null;
+  const stampItem = chosenStamp ? (chosenStamp.eligible.find((i) => i.orderItemId === query.stampItem) ?? chosenStamp.eligible[0]!) : null;
   let totals = base;
   let billError: string | null = null;
-  if (base && (redeemBlocks > 0 || chosenReward) && loyalty) {
+  if (base && (redeemBlocks > 0 || chosenReward || chosenStamp) && loyalty) {
     try {
-      totals = await previewBill(ctx, id, discount, redeemBlocks > 0 ? redeemBlocks * loyalty.settings.redeemPoints : 0, chosenReward ? { valueMinor: rewardValue } : null);
+      totals = await previewBill(ctx, id, discount, redeemBlocks > 0 ? redeemBlocks * loyalty.settings.redeemPoints : 0, chosenReward ? { valueMinor: rewardValue } : null, chosenStamp && stampItem ? { programId: chosenStamp.programId, orderItemId: stampItem.orderItemId } : null);
     } catch (e) {
       if (!(e instanceof DomainError)) throw e;
       billError = e.message;
@@ -632,8 +637,43 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                     </select>
                   </label>
                 )}
+                {stampOptions && stampOptions.programs.length > 0 && (
+                  <label className="text-xs font-medium">
+                    Stamp card
+                    <select name="stamp" defaultValue={chosenStamp?.programId ?? ""} className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                      <option value="">Do not use</option>
+                      {stampOptions.programs.map((p) => (
+                        <option key={p.programId} value={p.programId} disabled={p.card.available < 1}>
+                          {p.name}: {p.card.available > 0 ? `${p.card.available} free dish${p.card.available === 1 ? "" : "es"} ready` : `${p.card.inCard} of ${p.target}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {chosenStamp && (
+                  <label className="text-xs font-medium">
+                    Free dish
+                    <select name="stampItem" defaultValue={stampItem?.orderItemId ?? ""} className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                      {chosenStamp.eligible.map((i) => (
+                        <option key={i.orderItemId} value={i.orderItemId}>
+                          {i.name} ({formatNpr(i.unitPrice)})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <button className="min-h-9 rounded-lg border border-stone-300 px-3 text-sm">Apply</button>
               </form>
+              {stampOptions && stampOptions.programs.length > 0 && (
+                <ul className="mb-2 space-y-0.5 text-xs text-stone-600">
+                  {stampOptions.programs.map((p) => (
+                    <li key={p.programId}>
+                      {p.name}: {"●".repeat(p.card.inCard)}
+                      {"○".repeat(Math.max(0, p.target - p.card.inCard))} {p.card.available > 0 ? <strong className="text-green-800">{p.card.available} free dish{p.card.available === 1 ? "" : "es"} ready</strong> : `${p.card.toGo} to go`}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {billRewards.state === "unavailable" && (
                 <p className="mb-2 text-xs text-stone-500">Customer OS rewards are unavailable right now.</p>
               )}
@@ -698,6 +738,9 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                   <input type="hidden" name="redeemBlocks" value={redeemBlocks} />
                   {chosenReward && <input type="hidden" name="rewardId" value={chosenReward.id} />}
                   {freeItem && <input type="hidden" name="freeItemId" value={freeItem.id} />}
+                  {chosenStamp && stampItem && <input type="hidden" name="stampProgramId" value={chosenStamp.programId} />}
+                  {chosenStamp && stampItem && <input type="hidden" name="stampItemId" value={stampItem.orderItemId} />}
+                  {chosenStamp && stampItem && <p className="text-xs text-green-800">{chosenStamp.name}: {stampItem.name} is free (stamp card).</p>}
                   {chosenReward && <p className="text-xs text-green-800">{chosenReward.name} uses {chosenReward.cost} Customer OS points when you take payment.</p>}
                   <p className="text-xs text-stone-500">Payments must add up to {formatNpr(totals.grandTotal)}.</p>
                   {(["cash", "qr", "card"] as const).map((m, idx) => (

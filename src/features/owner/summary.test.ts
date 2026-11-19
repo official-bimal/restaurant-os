@@ -52,4 +52,32 @@ describe("summaries", () => {
     expect(t).toContain("Nothing unusual.");
     expect(t).not.toContain("FOOD COST");
   });
+
+  it("adds food cost percent, low stock, bookings, deals and hukka when there is something to say", () => {
+    const rich: SummaryData = {
+      ...data,
+      foodCostPercent: 31.5,
+      lowStock: [{ name: "Milk", unit: "ml", left: 800 }, { name: "Beans", unit: "g", left: 0 }, { name: "Sugar", unit: "g", left: 1500 }, { name: "Ice", unit: "g", left: 10 }],
+      tomorrowBookings: 3,
+      deals: { bills: 4, saved: 120_000 },
+      hukka: { started: 6, averageMinutes: 52, coils: 5 },
+    };
+    const short = shortSummary(rich);
+    expect(short).toContain("Food cost 31.5%");
+    expect(short).toContain("Low stock: Milk, Beans, Sugar +1");
+    expect(short).toContain("3 bookings tomorrow");
+    const full = fullSummary(rich).join("\n");
+    expect(full).toContain("(31.5% of food sales)");
+    expect(full).toContain("RUNNING LOW");
+    expect(full).toContain("Milk: 800 ml left");
+    expect(full).toContain("Beans: out");
+    expect(full).toContain("Sugar: 1.5 kg left");
+    expect(full).toContain("4 bills used a deal, Rs 1,200 off");
+    expect(full).toContain("6 started, about 52 min each, 5 extra coils");
+    expect(full).toContain("3 table bookings");
+  });
+  it("says nothing about the extras when there are none", () => {
+    const t = fullSummary({ ...data, lowStock: [], tomorrowBookings: 0, deals: { bills: 0, saved: 0 }, hukka: { started: 0, averageMinutes: null, coils: 0 } }).join("\n");
+    expect(t).not.toMatch(/RUNNING LOW|TOMORROW|DEALS|HUKKA/);
+  });
 });

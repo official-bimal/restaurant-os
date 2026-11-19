@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireTenant } from "@/server/auth";
 import { can } from "@/server/permissions";
 import { kitchenTickets } from "@/features/orders/server/service";
@@ -30,6 +31,9 @@ export default async function KitchenPage() {
       <div className="flex items-baseline gap-3">
         <h1 className="text-xl font-semibold">Kitchen</h1>
         <span className="text-sm text-stone-500">Updates every few seconds</span>
+        <Link href="/screen/kitchen" className="ml-auto rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
+          Big screen for a tablet or TV
+        </Link>
       </div>
       {tickets.length === 0 && <p className="text-stone-500">No tickets waiting. New orders appear here.</p>}
       {[...byStation.entries()].map(([station, items]) => (
@@ -57,7 +61,7 @@ export default async function KitchenPage() {
                   {t.addOns.length > 0 && (
                     <p className="text-sm font-medium text-orange-700">{t.addOns.map((a) => a.name).join(" · ")}</p>
                   )}
-                  {t.note && <p className="text-sm text-stone-600">{t.note}</p>}
+                  {t.note && <p className="mt-1 rounded-md bg-amber-100 px-2 py-1 text-base font-semibold text-amber-950">⚠ {t.note}</p>}
                   <div className="mt-2 flex items-center gap-2">
                     <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs">{t.status.toLowerCase()}</span>
                     {canUpdate && t.status === "PENDING" && (

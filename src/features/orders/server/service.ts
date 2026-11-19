@@ -1,4 +1,5 @@
 import { autoQueueKitchenSlip } from "@/features/printing/server/queue";
+import { resolveStamp } from "@/features/loyalty/server/stamps";
 import { evaluateDeal } from "@/features/billing/server/deals";
 import { combineDiscount } from "@/features/billing/deals";
 import { cleanBuyer } from "@/features/billing/ird";
@@ -322,10 +323,20 @@ export interface CheckoutInput {
   /** The buyer's name, and PAN if it is a business, to print on the bill. Fixed once the bill is issued. */
   buyerName?: string;
   buyerPan?: string;
+  /** A stamp card whose free dish is used on this bill, and which dish on the order is the free one. */
+  stampProgramId?: string;
+  stampItemId?: string;
 }
 
 /** Totals for an order using the business's tax settings, including any loyalty reward being applied. */
-export async function previewBill(ctx: TenantContext, orderId: string, discount: DiscountInput, redeemPoints = 0, reward: { valueMinor: number } | null = null) {
+export async function previewBill(
+  ctx: TenantContext,
+  orderId: string,
+  discount: DiscountInput,
+  redeemPoints = 0,
+  reward: { valueMinor: number } | null = null,
+  stamp: { programId: string; orderItemId?: string } | null = null,
+) {
   const order = await getOrder(ctx, orderId);
   if (!order) throw new DomainError("Order not found.");
   const business = await db.business.findUniqueOrThrow({ where: { id: ctx.businessId } });
@@ -334,6 +345,7 @@ export async function previewBill(ctx: TenantContext, orderId: string, discount:
     ? await db.customer.findFirst({ where: { id: order.customerId, businessId: ctx.businessId }, select: { pointsBalance: true } })
     : null;
   const plan = planRedemption({ settings, order, customer, requestedPoints: redeemPoints });
+  const stampUse = stamp ? await resolveStamp(db, ctx.businessId, order, stamp) : null;
   const liveItems = order.items.filter((i) => i.status !== "CANCELLED");
   // An automatic deal (happy hour, combo) takes its saving off first; the person's own discount comes off what is left.
   const deal = await evaluateDeal(db, ctx.businessId, order.branchId, business.timezone, liveItems);
@@ -344,7 +356,7 @@ export async function previewBill(ctx: TenantContext, orderId: string, discount:
       liveItems.map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
       {
         discount: effective,
-        loyaltyDiscount: plan.discount + (reward?.valueMinor ?? 0),
+        loyaltyDiscount: plan.discount + (reward?.valueMinor ?? 0) + (stampUse?.valueMinor ?? 0),
         serviceChargeBps: business.serviceChargeBps,
         vatMode: business.vatMode,
         vatBps: business.vatBps,
@@ -359,7 +371,7 @@ export async function previewBill(ctx: TenantContext, orderId: string, discount:
     throw e;
   }
   // Points are earned on the food, not on the delivery fee.
-  return { ...totals, deal: deal ? { name: deal.name, amount: deal.amount } : null, redeemPoints: plan.points, pointsToEarn: planEarn(settings, order, totals.grandTotal - totals.deliveryFee) };
+  return { ...totals, deal: deal ? { name: deal.name, amount: deal.amount } : null, stamp: stampUse ? { itemName: stampUse.itemName, value: stampUse.valueMinor } : null, redeemPoints: plan.points, pointsToEarn: planEarn(settings, order, totals.grandTotal - totals.deliveryFee) };
 }
 
 export async function checkout(ctx: TenantContext, orderId: string, input: CheckoutInput) {
@@ -399,6 +411,12 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
       ? await tx.customer.findFirst({ where: { id: order.customerId, businessId }, select: { pointsBalance: true } })
       : null;
     const plan = planRedemption({ settings, order, customer, requestedPoints: input.redeemPoints ?? 0 });
+    let stampUse = null;
+    if (input.stampProgramId) {
+      // One free dish at a time per customer: two cashiers cannot both use the same full card.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"stamp:" + (order.customerId ?? "")}))`;
+      stampUse = await resolveStamp(tx, businessId, order, { programId: input.stampProgramId, orderItemId: input.stampItemId });
+    }
     const deal = await evaluateDeal(tx, businessId, branchId, business.timezone, active);
     const effective = deal ? combineDiscount(input.discount, active.reduce((n, i) => n + (i.complimentary ? 0 : i.unitPrice * i.quantity), 0), deal.amount) : input.discount;
     let totals;
@@ -407,7 +425,7 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         active.map((i) => ({ unitPrice: i.unitPrice, quantity: i.quantity, complimentary: i.complimentary })),
         {
           discount: effective,
-          loyaltyDiscount: plan.discount + (used?.valueMinor ?? 0),
+          loyaltyDiscount: plan.discount + (used?.valueMinor ?? 0) + (stampUse?.valueMinor ?? 0),
           serviceChargeBps: business.serviceChargeBps,
           vatMode: business.vatMode,
           vatBps: business.vatBps,
@@ -459,6 +477,12 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         pointsRedeemed: plan.points + (used?.consumed ?? 0),
       },
     });
+    if (stampUse) {
+      await tx.stampRedemption.create({
+        data: { businessId, programId: stampUse.programId, customerId: stampUse.customerId, invoiceId: invoice.id, valueMinor: stampUse.valueMinor, itemName: stampUse.itemName },
+      });
+      await audit(tx, ctx, "stamps.redeem", "Invoice", invoice.id, { item: stampUse.itemName, value: stampUse.valueMinor });
+    }
     await applyCheckoutLoyalty(tx, {
       businessId,
       userId: ctx.userId,

@@ -4,7 +4,8 @@ import { can } from "@/server/permissions";
 import { DomainError } from "@/server/errors";
 import { audit } from "@/server/audit";
 import { normalizePhone } from "@/server/phone";
-import { dayRange, localDate } from "@/lib/business-day";
+import { addDays, dayRange, localDate } from "@/lib/business-day";
+import { foodCostPercent } from "@/features/stock/foodcost";
 import { getBranchRollup } from "@/features/reports/server/service";
 import { pushToTeam } from "@/features/notifications/server/push";
 import { getProvider } from "@/features/messaging/providers";
@@ -148,12 +149,18 @@ export async function getDayFacts(businessId: string, date: string, timezone: st
 export async function buildSummary(businessId: string, date: string) {
   const [business, cfg] = await Promise.all([db.business.findUniqueOrThrow({ where: { id: businessId }, select: { name: true, timezone: true } }), configFor(businessId)]);
   const sys = await systemCtx(businessId);
-  const [roll, facts, entries, team, stored] = await Promise.all([
+  const tomorrow = addDays(date, 1);
+  const dayStart = dayRange(date, business.timezone);
+  const [roll, facts, entries, team, stored, levels, bookings, dealBills, hukkaRows] = await Promise.all([
     getBranchRollup(sys, { from: date, to: date }),
     getDayFacts(businessId, date, business.timezone),
     db.timeEntry.findMany({ where: { businessId, clockIn: { gte: dayRange(date, business.timezone).start, lt: dayRange(date, business.timezone).end } }, include: { user: { select: { id: true, name: true } } } }),
     db.membership.findMany({ where: { businessId, role: { not: "RIDER" } }, include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } }),
     db.ownerAlert.findMany({ where: { businessId, date }, orderBy: { createdAt: "asc" }, select: { title: true } }),
+    db.branchStock.findMany({ where: { businessId, active: true, reorderLevel: { gt: 0 }, stockItem: { active: true } }, select: { quantity: true, reorderLevel: true, stockItem: { select: { name: true, unit: true } } } }),
+    db.reservation.count({ where: { businessId, date: tomorrow, status: { in: ["REQUESTED", "CONFIRMED"] } } }),
+    db.invoice.aggregate({ where: { businessId, createdAt: { gte: dayStart.start, lt: dayStart.end }, dealName: { not: null } }, _count: { _all: true }, _sum: { dealDiscount: true } }),
+    db.hukkaSession.findMany({ where: { businessId, startedAt: { gte: dayStart.start, lt: dayStart.end } }, select: { startedAt: true, endedAt: true, coils: true } }),
   ]);
   const c = roll.combined;
   const now = Date.now();
@@ -180,6 +187,21 @@ export async function buildSummary(businessId: string, date: string) {
     staff: [...mins.values()],
     staffOff: team.filter((m) => !mins.has(m.user.id)).map((m) => m.user.name),
     alerts: stored,
+    foodCostPercent: foodCostPercent(c.foodCost, Math.max(0, c.sales.gross - c.sales.vat - c.sales.discount)),
+    lowStock: levels
+      .filter((l) => l.quantity <= l.reorderLevel)
+      .sort((a, b) => a.quantity / a.reorderLevel - b.quantity / b.reorderLevel)
+      .map((l) => ({ name: l.stockItem.name, unit: l.stockItem.unit, left: l.quantity })),
+    tomorrowBookings: bookings,
+    deals: { bills: dealBills._count._all, saved: dealBills._sum.dealDiscount ?? 0 },
+    hukka: {
+      started: hukkaRows.length,
+      averageMinutes: (() => {
+        const done = hukkaRows.filter((h) => h.endedAt);
+        return done.length ? Math.round(done.reduce((n, h) => n + (h.endedAt!.getTime() - h.startedAt.getTime()) / 60_000, 0) / done.length) : null;
+      })(),
+      coils: hukkaRows.reduce((n, h) => n + h.coils, 0),
+    },
   };
   return { data, facts, candidates: evaluateRules(facts, cfg), short: shortSummary(data), full: fullSummary(data) };
 }
