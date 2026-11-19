@@ -49,7 +49,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
             ))}
           </div>
 
-          <div className="hidden group-has-[input[value=DINE_IN]:checked]:block">
+          <div className="hidden group-has-[input[value^=DINE]:checked]:block">
             <label className="text-sm font-medium">
               Table
               <select name="tableId" className="mt-1 block w-full max-w-xs px-3 py-2">
