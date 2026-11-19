@@ -34,7 +34,7 @@ async function today(businessId: string) {
 
 export async function createBill(
   ctx: TenantContext,
-  input: { supplierId: string; number?: string; billDate: string; dueDate?: string; amount: number; vatAmount?: number; note?: string; purchaseOrderId?: string },
+  input: { supplierId: string; number?: string; billDate: string; dueDate?: string; amount: number; vatAmount?: number; tdsAmount?: number; note?: string; purchaseOrderId?: string },
 ) {
   need(ctx);
   const { businessId, branchId } = scope(ctx);
@@ -43,6 +43,8 @@ export async function createBill(
   }
   const vatAmount = input.vatAmount ?? 0;
   if (!Number.isInteger(vatAmount) || vatAmount < 0 || vatAmount >= input.amount) throw new DomainError("The VAT must be less than the bill total.");
+  const tdsAmount = input.tdsAmount ?? 0;
+  if (!Number.isInteger(tdsAmount) || tdsAmount < 0 || tdsAmount >= input.amount) throw new DomainError("The tax deducted at source must be less than the bill total.");
   if (!isValidDate(input.billDate)) throw new DomainError("Choose a valid bill date.");
   const dueDate = input.dueDate?.trim() || null;
   if (dueDate && !isValidDate(dueDate)) throw new DomainError("Choose a valid due date.");
@@ -73,6 +75,7 @@ export async function createBill(
         dueDate,
         amount: input.amount,
         vatAmount,
+        tdsAmount,
         note,
         purchaseOrderId: input.purchaseOrderId || null,
         createdById: ctx.userId,
@@ -107,7 +110,8 @@ export async function recordBillPayment(
     if (bill.voidedAt) throw new DomainError("That bill was voided.");
     if (input.paidOn < bill.billDate) throw new DomainError("A payment cannot be dated before the bill.");
     const paid = (await tx.supplierPayment.aggregate({ where: { businessId, billId }, _sum: { amount: true } }))._sum.amount ?? 0;
-    const left = bill.amount - paid;
+    // Tax deducted at source is kept back from the supplier, so it is not part of what is paid to them.
+    const left = bill.amount - bill.tdsAmount - paid;
     if (input.amount > left) throw new DomainError(`Only ${(left / 100).toLocaleString("en-US", { minimumFractionDigits: left % 100 ? 2 : 0 })} is still owed on this bill.`);
     const pay = await tx.supplierPayment.create({
       data: { businessId, billId, amount: input.amount, method: input.method as PayMethod, paidOn: input.paidOn, reference, note, createdById: ctx.userId },
@@ -147,7 +151,7 @@ export async function listBills(ctx: TenantContext, filter: { supplierId?: strin
   });
   const rows = bills.map((b) => {
     const paid = b.payments.reduce((n, p) => n + p.amount, 0);
-    const state = { amount: b.amount, paid, voided: !!b.voidedAt };
+    const state = { amount: b.amount - b.tdsAmount, paid, voided: !!b.voidedAt };
     const left = outstanding(state);
     return {
       ...b,
@@ -168,13 +172,13 @@ export async function getPayables(ctx: TenantContext) {
   const [bills, suppliers] = await Promise.all([
     db.supplierBill.findMany({
       where: { businessId, voidedAt: null },
-      select: { supplierId: true, amount: true, dueDate: true, payments: { select: { amount: true } } },
+      select: { supplierId: true, amount: true, tdsAmount: true, dueDate: true, payments: { select: { amount: true } } },
     }),
     db.supplier.findMany({ where: { businessId }, select: { id: true, name: true } }),
   ]);
   const name = new Map(suppliers.map((s) => [s.id, s.name]));
   const rows = summarizePayables(
-    bills.map((b) => ({ supplierId: b.supplierId, amount: b.amount, paid: b.payments.reduce((n, p) => n + p.amount, 0), voided: false, dueDate: b.dueDate })),
+    bills.map((b) => ({ supplierId: b.supplierId, amount: b.amount - b.tdsAmount, paid: b.payments.reduce((n, p) => n + p.amount, 0), voided: false, dueDate: b.dueDate })),
     t,
   ).map((r) => ({ ...r, supplier: name.get(r.supplierId) ?? "Supplier" }));
   return {

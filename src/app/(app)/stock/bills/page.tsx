@@ -127,6 +127,10 @@ export default async function BillsPage({ searchParams }: PageProps<"/stock/bill
               <input name="vatAmount" type="number" min={0} step="0.01" className={`mt-1 block w-28 ${field}`} />
             </label>
             <label className="text-sm font-medium">
+              TDS kept back (Rs)
+              <input name="tdsAmount" type="number" min={0} step="0.01" className={`mt-1 block w-28 ${field}`} />
+            </label>
+            <label className="text-sm font-medium">
               Note
               <input name="note" maxLength={300} className={`mt-1 block w-52 ${field}`} />
             </label>

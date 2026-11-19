@@ -3,10 +3,10 @@ import type { TenantContext } from "@/server/auth";
 import { can } from "@/server/permissions";
 import { DomainError } from "@/server/errors";
 import { audit, type Tx } from "@/server/audit";
-import { isValidDate, localDate } from "@/lib/business-day";
+import { addDays, isValidDate, localDate } from "@/lib/business-day";
 import { DEFAULT_CHART, ACCOUNT_TYPES, type AccountType } from "../chart";
 import { fiscalYearOf, fiscalYearRange } from "../fiscal";
-import { refundLines, saleLines, supplierBillLines, supplierPaymentLines, balanced, type Line } from "../postings";
+import { refundLines, saleLines, supplierBillLines, supplierPaymentLines, payrollLines, salaryPaidLines, balanced, type Line } from "../postings";
 import { balanceSheet, ledger, profitAndLoss, trialBalance, type AccountInfo, type PostedLine } from "../books";
 
 /**
@@ -18,7 +18,7 @@ import { balanceSheet, ledger, profitAndLoss, trialBalance, type AccountInfo, ty
  */
 
 const MAX_PAISA = 100_000_000_000;
-const MANUAL_VOUCHERS = ["JOURNAL", "PAYMENT", "RECEIPT", "CONTRA"] as const;
+const MANUAL_VOUCHERS = ["JOURNAL", "PAYMENT", "RECEIPT", "CONTRA", "OPENING"] as const;
 export type ManualVoucher = (typeof MANUAL_VOUCHERS)[number];
 
 function needView(ctx: TenantContext) {
@@ -39,12 +39,27 @@ function cleanText(value: string | undefined | null, max: number, what: string):
 // the chart of accounts
 
 /** Creates the standard chart for a business that has none yet. Safe to call again. */
+const chartChecked = new Set<string>();
+
 export async function ensureChart(businessId: string): Promise<void> {
-  if ((await db.account.count({ where: { businessId } })) > 0) return;
-  await db.account.createMany({
-    data: DEFAULT_CHART.map((a) => ({ businessId, code: a.code, name: a.name, type: a.type, key: a.key ?? null })),
-    skipDuplicates: true,
-  });
+  if (chartChecked.has(businessId)) return;
+  if ((await db.account.count({ where: { businessId } })) === 0) {
+    await db.account.createMany({
+      data: DEFAULT_CHART.map((a) => ({ businessId, code: a.code, name: a.name, type: a.type, key: a.key ?? null })),
+      skipDuplicates: true,
+    });
+  } else {
+    // A chart made before a system account existed: give the account its key, or add it.
+    const have = await db.account.findMany({ where: { businessId }, select: { code: true, key: true } });
+    const keys = new Set(have.map((a) => a.key).filter(Boolean));
+    for (const a of DEFAULT_CHART) {
+      if (!a.key || keys.has(a.key)) continue;
+      const sameCode = have.find((h) => h.code === a.code);
+      if (sameCode) await db.account.updateMany({ where: { businessId, code: a.code, key: null }, data: { key: a.key } });
+      else await db.account.createMany({ data: [{ businessId, code: a.code, name: a.name, type: a.type, key: a.key }], skipDuplicates: true });
+    }
+  }
+  chartChecked.add(businessId);
 }
 
 export async function listAccounts(ctx: TenantContext) {
@@ -91,12 +106,12 @@ export async function updateAccount(ctx: TenantContext, id: string, input: { nam
 
 type Keyed = Map<string, string>; // system key -> account id
 
-async function keyMap(tx: Tx, businessId: string): Promise<Keyed> {
+export async function keyMap(tx: Tx, businessId: string): Promise<Keyed> {
   const rows = await tx.account.findMany({ where: { businessId, key: { not: null } }, select: { id: true, key: true } });
   return new Map(rows.map((r) => [r.key!, r.id]));
 }
 
-interface NewEntry {
+export interface NewEntry {
   businessId: string;
   branchId?: string | null;
   date: string;
@@ -110,8 +125,11 @@ interface NewEntry {
 }
 
 /** Writes one balanced voucher with the next number of its fiscal year. */
-async function writeEntry(tx: Tx, e: NewEntry) {
+export async function writeEntry(tx: Tx, e: NewEntry) {
   if (!balanced(e.lines)) throw new DomainError("Debits and credits must be equal.");
+  // Something the software posts by itself (a sale, a bill) never lands in a fiscal year that has been closed: it goes on the first open day.
+  const closed = e.sourceKind ? await latestClosedDate(tx, e.businessId) : null;
+  if (closed && e.date <= closed) e = { ...e, date: addDays(closed, 1) };
   const fiscalYear = fiscalYearOf(e.date);
   // One writer at a time per business, so numbers have no gaps and no two vouchers get the same one.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"journal:" + e.businessId}))`;
@@ -138,7 +156,7 @@ async function writeEntry(tx: Tx, e: NewEntry) {
   return entry;
 }
 
-function resolve(keys: Keyed, lines: Line[]) {
+export function resolve(keys: Keyed, lines: Line[]) {
   return lines.map((l) => {
     const accountId = keys.get(l.key);
     if (!accountId) throw new DomainError(`The account "${l.key}" is missing from the chart.`);
@@ -157,10 +175,10 @@ export async function syncPostings(businessId: string): Promise<number> {
   const biz = await db.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
   let posted = 0;
 
-  const unposted = async (table: string, kind: string, order: string): Promise<string[]> => {
+  const unposted = async (table: string, kind: string, order: string, extra = ""): Promise<string[]> => {
     // table and order are fixed strings from this file, never user input.
     const rows = await db.$queryRawUnsafe<{ id: string }[]>(
-      `SELECT t."id" FROM "${table}" t WHERE t."businessId" = $1 AND NOT EXISTS (SELECT 1 FROM "JournalEntry" j WHERE j."businessId" = t."businessId" AND j."sourceKind" = $2 AND j."sourceId" = t."id") ORDER BY t."${order}" LIMIT ${BATCH}`,
+      `SELECT t."id" FROM "${table}" t WHERE t."businessId" = $1 AND NOT EXISTS (SELECT 1 FROM "JournalEntry" j WHERE j."businessId" = t."businessId" AND j."sourceKind" = $2 AND j."sourceId" = t."id") ${extra} ORDER BY t."${order}" LIMIT ${BATCH}`,
       businessId,
       kind,
     );
@@ -223,7 +241,7 @@ export async function syncPostings(businessId: string): Promise<number> {
           narration: `Purchase from ${b.supplier.name}${b.number ? `, bill ${b.number}` : ""}`,
           sourceKind: "PURCHASE",
           sourceId: b.id,
-          lines: resolve(keys, supplierBillLines(b.amount, b.vatAmount)),
+          lines: resolve(keys, supplierBillLines(b.amount, b.vatAmount, b.tdsAmount)),
         });
         return 1;
       }).catch(ignoreDuplicate);
@@ -243,6 +261,44 @@ export async function syncPostings(businessId: string): Promise<number> {
           sourceKind: "SUPPLIER_PAYMENT",
           sourceId: p.id,
           lines: resolve(keys, supplierPaymentLines(p.amount, p.method)),
+        });
+        return 1;
+      }).catch(ignoreDuplicate);
+    }
+
+    for (const id of await unposted("PayrollRun", "PAYROLL", "createdAt")) {
+      did += await db.$transaction(async (tx) => {
+        const run = await tx.payrollRun.findFirst({ where: { id, businessId }, include: { lines: true } });
+        if (!run) return 0;
+        const total = run.lines.reduce((n, l) => n + l.netPay, 0);
+        if (total <= 0) return 0;
+        const keys = await keyMap(tx, businessId);
+        await writeEntry(tx, {
+          businessId,
+          date: run.periodEnd,
+          voucher: "PAYROLL",
+          narration: `Wages for ${run.periodStart} to ${run.periodEnd}`,
+          sourceKind: "PAYROLL",
+          sourceId: run.id,
+          lines: resolve(keys, payrollLines(total)),
+        });
+        return 1;
+      }).catch(ignoreDuplicate);
+    }
+
+    for (const id of await unposted("PayrollLine", "SALARY_PAID", "id", `AND t."paidAt" IS NOT NULL AND t."netPay" > 0 AND EXISTS (SELECT 1 FROM "JournalEntry" w WHERE w."businessId" = t."businessId" AND w."sourceKind" = 'PAYROLL' AND w."sourceId" = t."runId")`)) {
+      did += await db.$transaction(async (tx) => {
+        const l = await tx.payrollLine.findFirst({ where: { id, businessId } });
+        if (!l || !l.paidAt) return 0;
+        const keys = await keyMap(tx, businessId);
+        await writeEntry(tx, {
+          businessId,
+          date: localDate(l.paidAt, biz.timezone),
+          voucher: "SALARY_PAID",
+          narration: `Salary paid to ${l.name}`,
+          sourceKind: "SALARY_PAID",
+          sourceId: l.id,
+          lines: resolve(keys, salaryPaidLines(l.netPay, l.paidMethod ?? "")),
         });
         return 1;
       }).catch(ignoreDuplicate);
@@ -269,19 +325,28 @@ function ignoreDuplicate(e: unknown): number {
   throw e;
 }
 
-async function reverseInTx(tx: Tx, businessId: string, entryId: string, reason: string, userId: string | null) {
+/** The last day of the latest fiscal year that has been closed (and not reopened), or null. */
+export async function latestClosedDate(tx: Tx, businessId: string): Promise<string | null> {
+  const rows = await tx.journalEntry.findMany({ where: { businessId, voucher: "CLOSING", reversesId: null }, select: { id: true, date: true }, orderBy: { date: "desc" } });
+  for (const r of rows) {
+    if (!(await tx.journalEntry.findFirst({ where: { businessId, reversesId: r.id }, select: { id: true } }))) return r.date;
+  }
+  return null;
+}
+
+export async function reverseInTx(tx: Tx, businessId: string, entryId: string, reason: string, userId: string | null, opts: { date?: string; voucher?: string } = {}) {
   const orig = await tx.journalEntry.findFirst({ where: { id: entryId, businessId }, include: { lines: true } });
   if (!orig) throw new DomainError("Voucher not found.");
-  if (orig.voucher === "REVERSAL") throw new DomainError("A reversal cannot be reversed. Make a new voucher instead.");
+  if (orig.voucher === "REVERSAL" || (orig.voucher === "CLOSING" && orig.reversesId)) throw new DomainError("A reversal cannot be reversed. Make a new voucher instead.");
   if (await tx.journalEntry.findFirst({ where: { businessId, reversesId: orig.id } })) throw new DomainError("That voucher has already been reversed.");
   const biz = await tx.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
   // The reversal is dated today, never back in a period that may already have been filed.
-  const date = localDate(new Date(), biz.timezone);
+  const date = opts.date ?? localDate(new Date(), biz.timezone);
   return writeEntry(tx, {
     businessId,
     branchId: orig.branchId,
     date,
-    voucher: "REVERSAL",
+    voucher: opts.voucher ?? "REVERSAL",
     narration: `Reversal of ${orig.fiscalYear} #${orig.number}: ${reason}`.slice(0, 200),
     reversesId: orig.id,
     createdById: userId,
@@ -318,6 +383,8 @@ export async function createVoucher(ctx: TenantContext, input: { voucher: string
   if (input.date > localDate(new Date(), biz.timezone)) throw new DomainError("A voucher cannot be dated in the future.");
 
   return db.$transaction(async (tx) => {
+    const closed = await latestClosedDate(tx, ctx.businessId);
+    if (closed && input.date <= closed) throw new DomainError(`The fiscal year up to ${closed} is closed. Date the voucher after that, or ask the owner to reopen the year.`);
     const ids = [...new Set(input.lines.map((l) => l.accountId))];
     const accounts = await tx.account.findMany({ where: { businessId: ctx.businessId, id: { in: ids } } });
     if (accounts.length !== ids.length) throw new DomainError("One of the accounts was not found.");
@@ -360,12 +427,12 @@ function range(from: string, to: string) {
   if (from > to) throw new DomainError("The start date is after the end date.");
 }
 
-async function lineRows(businessId: string, where: { from?: string; to?: string; accountId?: string }) {
+async function lineRows(businessId: string, where: { from?: string; to?: string; accountId?: string; excludeClosing?: boolean }) {
   const rows = await db.journalLine.findMany({
     where: {
       businessId,
       ...(where.accountId ? { accountId: where.accountId } : {}),
-      entry: { businessId, ...(where.from || where.to ? { date: { ...(where.from ? { gte: where.from } : {}), ...(where.to ? { lte: where.to } : {}) } } : {}) },
+      entry: { businessId, ...(where.excludeClosing ? { voucher: { not: "CLOSING" } } : {}), ...(where.from || where.to ? { date: { ...(where.from ? { gte: where.from } : {}), ...(where.to ? { lte: where.to } : {}) } } : {}) },
     },
     select: { accountId: true, debit: true, credit: true, entry: { select: { date: true } } },
   });
@@ -392,7 +459,7 @@ export async function getTrialBalance(ctx: TenantContext, asOf: string) {
 export async function getProfitAndLoss(ctx: TenantContext, from: string, to: string) {
   await prepare(ctx);
   range(from, to);
-  const [accounts, lines] = await Promise.all([infoOf(ctx.businessId), lineRows(ctx.businessId, { from, to })]);
+  const [accounts, lines] = await Promise.all([infoOf(ctx.businessId), lineRows(ctx.businessId, { from, to, excludeClosing: true })]);
   return profitAndLoss(accounts, lines);
 }
 

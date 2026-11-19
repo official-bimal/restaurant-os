@@ -23,6 +23,7 @@ export async function createBillAction(formData: FormData) {
       dueDate: String(formData.get("dueDate") ?? ""),
       amount: rupeesToPaisa(formData.get("amount")),
       vatAmount: rupeesToPaisa(formData.get("vatAmount")),
+      tdsAmount: rupeesToPaisa(formData.get("tdsAmount")),
       note: String(formData.get("note") ?? ""),
     }),
   );

@@ -31,6 +31,10 @@ describe("postings", () => {
     expect(balanced(withVat)).toBe(true);
     expect(withVat.find((x) => x.key === "VAT_INPUT")!.debit).toBe(1_300);
     expect(withVat.find((x) => x.key === "PURCHASES")!.debit).toBe(10_000);
+    const withTds = supplierBillLines(10_000, 0, 1_000);
+    expect(balanced(withTds)).toBe(true);
+    expect(withTds.find((x) => x.key === "PAYABLE")!.credit).toBe(9_000);
+    expect(withTds.find((x) => x.key === "TDS_PAYABLE")!.credit).toBe(1_000);
     expect(supplierPaymentLines(5_000, "CHEQUE").find((x) => x.credit)!.key).toBe("BANK");
   });
 });

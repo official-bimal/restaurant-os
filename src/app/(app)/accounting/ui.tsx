@@ -17,6 +17,12 @@ const TABS = [
   { href: "/accounting/sales-book", label: "Sales book" },
   { href: "/accounting/purchase-book", label: "Purchase book" },
   { href: "/accounting/vat", label: "VAT summary" },
+  { href: "/accounting/tds", label: "TDS" },
+  { href: "/accounting/reconcile", label: "Bank reconciliation" },
+  { href: "/accounting/assets", label: "Fixed assets" },
+  { href: "/accounting/budget", label: "Budget" },
+  { href: "/accounting/opening-balances", label: "Opening balances" },
+  { href: "/accounting/year-end", label: "Year-end" },
   { href: "/accounting/audit-log", label: "Audit log" },
 ];
 

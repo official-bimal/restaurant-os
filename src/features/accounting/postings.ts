@@ -79,11 +79,13 @@ export function refundLines(r: RefundInput): Line[] {
 }
 
 /** A supplier's bill: what we bought, and that we now owe for it. */
-export function supplierBillLines(amount: number, vat = 0): Line[] {
+export function supplierBillLines(amount: number, vat = 0, tds = 0): Line[] {
   return tidy([
     { key: "PURCHASES", debit: amount - vat, credit: 0 },
     { key: "VAT_INPUT", debit: vat, credit: 0 },
-    { key: "PAYABLE", debit: 0, credit: amount },
+    // Tax deducted at source is owed to IRD, not to the supplier.
+    { key: "PAYABLE", debit: 0, credit: amount - tds },
+    { key: "TDS_PAYABLE", debit: 0, credit: tds },
   ]);
 }
 
@@ -92,6 +94,30 @@ export function supplierPaymentLines(amount: number, method: string): Line[] {
   return tidy([
     { key: "PAYABLE", debit: amount, credit: 0 },
     { key: SUPPLIER_PAY_KEY[method] ?? "BANK", debit: 0, credit: amount },
+  ]);
+}
+
+/** Which account a salary was paid from, from what the manager typed ("Cash", "Bank transfer", "eSewa"...). Anything unclear is cash. */
+export function salaryPayKey(how: string): string {
+  const t = how.toLowerCase();
+  if (/bank|cheque|check|transfer|ips|connect/.test(t)) return "BANK";
+  if (/qr|esewa|khalti|fonepay|wallet/.test(t)) return "WALLET";
+  return "CASH";
+}
+
+/** A finalised payroll: wages are an expense now, owed to staff until paid. */
+export function payrollLines(total: number): Line[] {
+  return tidy([
+    { key: "SALARIES", debit: total, credit: 0 },
+    { key: "SALARY_PAYABLE", debit: 0, credit: total },
+  ]);
+}
+
+/** Paying one person's salary. */
+export function salaryPaidLines(amount: number, how: string): Line[] {
+  return tidy([
+    { key: "SALARY_PAYABLE", debit: amount, credit: 0 },
+    { key: salaryPayKey(how), debit: 0, credit: amount },
   ]);
 }
 

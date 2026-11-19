@@ -19,7 +19,8 @@ export const DEFAULT_CHART: readonly DefaultAccount[] = [
   { code: "1050", name: "Customers owing (credit sales)", type: "ASSET", key: "RECEIVABLE" },
   { code: "1100", name: "Stock of food and drink", type: "ASSET", key: "INVENTORY" },
   { code: "1200", name: "VAT paid on purchases (input VAT)", type: "ASSET", key: "VAT_INPUT" },
-  { code: "1500", name: "Furniture, kitchen equipment and fixtures", type: "ASSET" },
+  { code: "1500", name: "Furniture, kitchen equipment and fixtures", type: "ASSET", key: "FIXED_ASSETS" },
+  { code: "1510", name: "Depreciation so far (reduces fixed assets)", type: "ASSET", key: "ACC_DEPRECIATION" },
   { code: "2010", name: "Suppliers owed (accounts payable)", type: "LIABILITY", key: "PAYABLE" },
   { code: "2100", name: "VAT collected on sales (output VAT)", type: "LIABILITY", key: "VAT_OUTPUT" },
   { code: "2200", name: "TDS payable", type: "LIABILITY", key: "TDS_PAYABLE" },
@@ -42,6 +43,7 @@ export const DEFAULT_CHART: readonly DefaultAccount[] = [
   { code: "5400", name: "Repairs and maintenance", type: "EXPENSE" },
   { code: "5500", name: "Marketing", type: "EXPENSE" },
   { code: "5600", name: "Bank and card charges", type: "EXPENSE" },
+  { code: "5700", name: "Depreciation", type: "EXPENSE", key: "DEPRECIATION" },
   { code: "5900", name: "Other expenses", type: "EXPENSE" },
 ];
 

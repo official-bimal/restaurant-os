@@ -215,6 +215,8 @@ model Business {
   numberBlocks     OfflineNumberBlock[]
   invoiceGaps      InvoiceGap[]
   accounts         Account[]
+  fixedAssets      FixedAsset[]
+  budgets          Budget[]
   journalEntries   JournalEntry[]
   customerOsLink   CustomerOsLink?
   customerOsEvents CustomerOsEvent[]
@@ -1534,6 +1536,8 @@ model SupplierBill {
   amount          Int
   /// The VAT inside the total, in paisa (0 when the supplier charged none).
   vatAmount       Int       @default(0)
+  /// Tax deducted at source when paying this supplier, in paisa: kept back from what is paid and owed to IRD.
+  tdsAmount       Int       @default(0)
   note            String?
   /// The purchase order it is for, if any.
   purchaseOrderId String?
@@ -2093,17 +2097,66 @@ model JournalEntry {
 }
 
 model JournalLine {
-  id         String  @id @default(cuid())
-  businessId String
-  entryId    String
-  accountId  String
-  debit      Int     @default(0)
-  credit     Int     @default(0)
-  narration  String?
+  id           String  @id @default(cuid())
+  businessId   String
+  entryId      String
+  accountId    String
+  debit        Int     @default(0)
+  credit       Int     @default(0)
+  narration    String?
+  /// The statement date this line was ticked off against in a bank reconciliation (YYYY-MM-DD), once matched.
+  reconciledOn String?
 
   entry   JournalEntry @relation(fields: [businessId, entryId], references: [businessId, id], onDelete: Cascade)
   account Account      @relation(fields: [businessId, accountId], references: [businessId, id])
 
   @@index([businessId, entryId])
   @@index([businessId, accountId])
+}
+
+/// Something the business owns for years (an oven, furniture). Depreciated once a fiscal year on its reducing balance.
+model FixedAsset {
+  id           String   @id @default(cuid())
+  businessId   String
+  name         String
+  /// What it cost, in paisa.
+  cost         Int
+  /// YYYY-MM-DD.
+  purchaseDate String
+  /// Yearly depreciation rate in basis points (1500 = 15%), on the value left after earlier depreciation.
+  rateBps      Int
+  /// YYYY-MM-DD, once sold or scrapped. No more depreciation after that.
+  disposedOn   String?
+  createdAt    DateTime @default(now())
+
+  business      Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  depreciations FixedAssetDepreciation[]
+
+  @@unique([businessId, id])
+}
+
+model FixedAssetDepreciation {
+  id         String   @id @default(cuid())
+  businessId String
+  assetId    String
+  fiscalYear String
+  amount     Int
+  createdAt  DateTime @default(now())
+
+  asset FixedAsset @relation(fields: [businessId, assetId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, assetId, fiscalYear])
+}
+
+/// What the owner expects to earn or spend on one account in a fiscal year.
+model Budget {
+  id         String @id @default(cuid())
+  businessId String
+  fiscalYear String
+  accountId  String
+  amount     Int
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, fiscalYear, accountId])
 }
