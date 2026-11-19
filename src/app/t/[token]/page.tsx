@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
+import QRCode from "qrcode";
 import { cookies } from "next/headers";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatNpr } from "@/features/billing/calc";
 import { getGuestView, getSettledSummary, lookupTable, resolveGuest } from "@/features/guest/server/service";
 import { GUEST_COOKIE, verifyGuestToken } from "@/server/session";
-import { startOrderingAction } from "./actions";
 import { GuestLoyalty, GuestMenu, ServiceButtons } from "./guest-menu";
 import { GuestFeedback } from "./guest-feedback";
+import { GuestWifi } from "./guest-wifi";
+import { LandingActions } from "./landing-actions";
+import { wifiQrPayload } from "@/features/guest/wifi";
 import { LangSwitch, T } from "./lang";
 import type { StringKey } from "@/features/guest/i18n";
 import { getDishRatingState, getFeedbackState } from "@/features/feedback/server/service";
@@ -67,6 +70,10 @@ export default async function GuestPage({ params, searchParams }: PageProps<"/t/
     );
   }
 
+  // The branch's guest Wi-Fi, with a QR code another phone can scan to join it.
+  const wifiQr = table.wifi ? await QRCode.toString(wifiQrPayload(table.wifi), { type: "svg", margin: 1, errorCorrectionLevel: "M" }) : null;
+  const wifiCard = table.wifi && wifiQr ? <GuestWifi name={table.wifi.name} password={table.wifi.password} hidden={table.wifi.hidden} qr={wifiQr} /> : null;
+
   const store = await cookies();
   const claims = verifyGuestToken(store.get(GUEST_COOKIE)?.value);
   // A cookie from another table, or from a sitting that has ended, gives no access here.
@@ -123,11 +130,7 @@ export default async function GuestPage({ params, searchParams }: PageProps<"/t/
             {error}
           </p>
         )}
-        <form action={startOrderingAction.bind(null, token)} className="mt-6">
-          <button className="min-h-12 w-full rounded-xl bg-brand-600 hover:bg-brand-700 px-4 text-lg font-semibold text-white">
-            <T k="startOrdering" />
-          </button>
-        </form>
+        <LandingActions token={token} rewards={table.rewards} wifi={table.wifi && wifiQr ? { name: table.wifi.name, password: table.wifi.password, hidden: table.wifi.hidden, qr: wifiQr } : null} />
       </Shell>
     );
   }
@@ -152,6 +155,8 @@ export default async function GuestPage({ params, searchParams }: PageProps<"/t/
           <T k="table" v={{ label: guest.tableLabel }} />
         </p>
       </header>
+
+      {wifiCard}
 
       <div className="mb-5">
         <ServiceButtons token={token} open={openKinds} />

@@ -23,19 +23,25 @@ async function currentGuest() {
   return g.ctx;
 }
 
-/** Tapping "Start ordering" opens (or joins) the table's sitting. A link preview never does. */
+/** Opens (or joins) the table's sitting and remembers it on the guest's phone. Only ever called from a tap, never from a link preview. */
+async function beginSitting(token: string) {
+  const gc = await openSession(token);
+  const store = await cookies();
+  store.set(GUEST_COOKIE, createGuestToken({ sessionId: gc.sessionId, tableId: gc.tableId }), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: cookiesSecure(),
+    path: "/",
+    maxAge: GUEST_MAX_AGE_SECONDS,
+  });
+  return gc;
+}
+
+/** Tapping "Order food" opens (or joins) the table's sitting. A link preview never does. */
 export async function startOrderingAction(token: string) {
   let target = `/t/${token}`;
   try {
-    const gc = await openSession(token);
-    const store = await cookies();
-    store.set(GUEST_COOKIE, createGuestToken({ sessionId: gc.sessionId, tableId: gc.tableId }), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: cookiesSecure(),
-      path: "/",
-      maxAge: GUEST_MAX_AGE_SECONDS,
-    });
+    await beginSitting(token);
   } catch (e) {
     if (!(e instanceof DomainError)) throw e;
     target = `/t/${token}?error=${encodeURIComponent(e.message)}`;
@@ -90,6 +96,24 @@ const phoneSchema = z.object({
   name: z.string().max(80).optional(),
   marketingConsent: z.boolean().optional(),
 });
+
+/**
+ * "Join our rewards" straight from the first screen: opens the sitting, says whose points this visit earns, and goes on to the
+ * menu. Always answers the same way whether or not the number is already a customer.
+ */
+export async function joinRewardsAction(token: string, input: unknown): Promise<GuestResult> {
+  const parsed = phoneSchema.safeParse(input);
+  if (!parsed.success) return { error: "Enter a valid phone number." };
+  try {
+    const gc = await beginSitting(token);
+    await attachGuestCustomer(gc, parsed.data);
+  } catch (e) {
+    if (e instanceof DomainError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/t/${token}`);
+  redirect(`/t/${token}`);
+}
 
 export async function attachNumberAction(token: string, input: unknown): Promise<GuestResult & { maskedPhone?: string }> {
   const parsed = phoneSchema.safeParse(input);

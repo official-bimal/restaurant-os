@@ -5,6 +5,7 @@ import { DomainError } from "@/server/errors";
 import { audit } from "@/server/audit";
 import { Prisma } from "@/generated/prisma/client";
 import { parseLocation } from "@/features/delivery/geo";
+import { cleanWifi, WifiError } from "@/features/guest/wifi";
 
 /**
  * Branches (outlets). Owner only. Every query is filtered by businessId. A branch is never
@@ -149,5 +150,28 @@ export async function setBranchLocation(ctx: TenantContext, id: string, text: st
     });
     if (r.count === 0) throw new DomainError("Branch not found.");
     await audit(tx, ctx, "branch.location", "Branch", id, { set: !!point });
+  });
+}
+
+/**
+ * The Wi-Fi guests may use, shown on that branch's table QR page. A blank network name clears it (nothing is shown). The password
+ * is kept as typed (it is shown to guests, so it is not a secret from them) and is never written to the audit log.
+ */
+export async function setBranchWifi(ctx: TenantContext, id: string, input: { name: string; password: string; security: string; hidden: boolean }) {
+  needManage(ctx);
+  let wifi;
+  try {
+    wifi = cleanWifi(input);
+  } catch (e) {
+    if (e instanceof WifiError) throw new DomainError(e.message);
+    throw e;
+  }
+  await db.$transaction(async (tx) => {
+    const r = await tx.branch.updateMany({
+      where: { id, businessId: ctx.businessId },
+      data: { wifiName: wifi?.name ?? null, wifiPassword: wifi?.password ?? null, wifiSecurity: wifi?.security ?? "WPA", wifiHidden: wifi?.hidden ?? false },
+    });
+    if (r.count === 0) throw new DomainError("Branch not found.");
+    await audit(tx, ctx, "branch.wifi", "Branch", id, { set: !!wifi });
   });
 }

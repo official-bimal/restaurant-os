@@ -1118,6 +1118,12 @@ model Branch {
   /// A line shown at the top of the page ("Closed on Tuesdays", "Delivery until 8pm").
   onlineNotice      String?
   onlineOrders      OnlineOrder[]
+  /// Wi-Fi for guests, shown on the table QR page. Blank name = not shown.
+  wifiName          String?
+  wifiPassword      String?
+  /// WPA (covers WPA2 and WPA3 passwords), WEP or nopass.
+  wifiSecurity      String               @default("WPA")
+  wifiHidden        Boolean              @default(false)
 
   @@unique([businessId, id])
   @@unique([businessId, name])

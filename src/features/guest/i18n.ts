@@ -36,6 +36,26 @@ export const STRINGS = {
   estTotal: { en: "Estimated total", ne: "अनुमानित जम्मा" },
   includesCharges: { en: "Includes service charge and tax. Any discount is applied at the counter.", ne: "सेवा शुल्क र कर समावेश छ। कुनै छुट काउन्टरमा लगाइन्छ।" },
 
+  // the first screen: what would you like to do
+  hubTitle: { en: "What would you like to do?", ne: "तपाईं के गर्न चाहनुहुन्छ?" },
+  tileOrder: { en: "Order food", ne: "खाना अर्डर गर्नुहोस्" },
+  tileOrderSub: { en: "See the menu and order from your phone", ne: "मेनु हेर्नुहोस् र फोनबाट अर्डर गर्नुहोस्" },
+  tileRewards: { en: "Join our rewards", ne: "हाम्रो रिवार्डमा जोडिनुहोस्" },
+  tileRewardsSub: { en: "Earn points every time you visit", ne: "हरेक भ्रमणमा अंक कमाउनुहोस्" },
+  joinNow: { en: "Join and start ordering", ne: "जोडिनुहोस् र अर्डर सुरु गर्नुहोस्" },
+
+  // Wi-Fi
+  wifiTitle: { en: "Free Wi-Fi", ne: "निःशुल्क Wi-Fi" },
+  wifiNetwork: { en: "Network", ne: "नेटवर्क" },
+  wifiPassword: { en: "Password", ne: "पासवर्ड" },
+  wifiOpen: { en: "This network has no password.", ne: "यो नेटवर्कमा पासवर्ड छैन।" },
+  wifiHelp: { en: "Copy the password, then pick this network in your phone's Wi-Fi settings.", ne: "पासवर्ड कपी गर्नुहोस्, अनि फोनको Wi-Fi सेटिङमा यो नेटवर्क छान्नुहोस्।" },
+  wifiCopy: { en: "Copy", ne: "कपी" },
+  wifiCopied: { en: "Copied", ne: "कपी भयो" },
+  wifiQr: { en: "Connect another phone with a QR code", ne: "अर्को फोन QR कोडबाट जोड्नुहोस्" },
+  wifiQrHelp: { en: "Point the other phone's camera at this code and tap the Wi-Fi offer that appears.", ne: "अर्को फोनको क्यामेरा यो कोडतिर देखाउनुहोस् र आउने Wi-Fi प्रस्तावमा थिच्नुहोस्।" },
+  wifiHidden: { en: "This is a hidden network: add it by typing the name.", ne: "यो लुकेको नेटवर्क हो: नाम टाइप गरेर थप्नुहोस्।" },
+
   // service buttons
   callWaiter: { en: "Call waiter", ne: "वेटरलाई बोलाउनुहोस्" },
   water: { en: "Water", ne: "पानी" },

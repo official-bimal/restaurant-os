@@ -19,6 +19,16 @@ import { orderableItemIds } from "@/features/menu/server/menu-sets";
 import { addOnNames, groupRulesForMenu, priceAddOns } from "@/features/menu/server/pricing";
 import { pushToTeam } from "@/features/notifications/server/push";
 import { branchMenuOverrides, effectiveItem, hiddenDishIds } from "@/features/menu/server/branch-menu";
+import { cleanWifi } from "@/features/guest/wifi";
+
+/** Stored Wi-Fi settings that no longer pass the checks (edited by hand in the database) are simply not shown. */
+function cleanWifiOrNull(raw: { name: string; password: string; security: string; hidden: boolean }) {
+  try {
+    return cleanWifi(raw);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Guest (QR) ordering.
@@ -81,15 +91,20 @@ export async function lookupTable(token: string) {
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
   const table = await db.diningTable.findUnique({
     where: { publicToken: token },
-    include: { business: { select: { name: true, guestOrderingEnabled: true } } },
+    include: { business: { select: { name: true, guestOrderingEnabled: true, loyaltyEnabled: true, customerOsLink: { select: { enabled: true } } } }, branch: { select: { wifiName: true, wifiPassword: true, wifiSecurity: true, wifiHidden: true } } },
   });
   if (!table) return null;
+  // The branch's guest Wi-Fi, if the owner set one. Anyone holding the table's QR code may see it, like a sign on the wall.
+  const wifi = table.branch.wifiName ? cleanWifiOrNull({ name: table.branch.wifiName, password: table.branch.wifiPassword ?? "", security: table.branch.wifiSecurity, hidden: table.branch.wifiHidden }) : null;
   return {
     tableId: table.id,
     businessId: table.businessId,
     tableLabel: table.label,
     businessName: table.business.name,
     enabled: table.business.guestOrderingEnabled,
+    // Points are given here, or by Customer OS when it is connected: either way a guest can say whose points this visit earns.
+    rewards: table.business.loyaltyEnabled || !!table.business.customerOsLink?.enabled,
+    wifi,
   };
 }
 
@@ -290,6 +305,7 @@ export async function getGuestView(gc: GuestContext) {
   // Same calculation staff use for each bill, so the numbers cannot disagree. Each bill is
   // rounded on its own because each becomes its own invoice.
   const settings = settingsFromBusiness(business);
+  const linkedToCustomerOs = !!(await db.customerOsLink.findUnique({ where: { businessId }, select: { enabled: true } }))?.enabled;
   const bills = orders
     .map((o) => {
       const active = o.items.filter((i) => i.status !== "CANCELLED");
@@ -314,7 +330,7 @@ export async function getGuestView(gc: GuestContext) {
   // Deliberately no balance, name or history: the number is unverified, so we must not
   // reveal what we know about whoever owns it.
   const loyalty = {
-    enabled: settings.enabled,
+    enabled: settings.enabled || linkedToCustomerOs,
     maskedPhone: session?.customer ? maskPhone(session.customer.phone) : null,
     pointsToEarn: bills.reduce((n, b) => n + b.points, 0),
   };

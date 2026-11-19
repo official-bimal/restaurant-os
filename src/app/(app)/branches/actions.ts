@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/server/auth";
 import { guarded } from "@/server/guarded";
 import { BRANCH_COOKIE } from "@/server/session";
-import { createBranch, setBranchActive, setBranchLocation, setStaffBranches, updateBranch } from "@/features/branches/server/service";
+import { createBranch, setBranchActive, setBranchLocation, setBranchWifi, setStaffBranches, updateBranch } from "@/features/branches/server/service";
 
 const BACK = "/branches";
 
@@ -31,6 +31,20 @@ export async function updateBranchAction(id: string, formData: FormData) {
 export async function setBranchLocationAction(id: string, formData: FormData) {
   const ctx = await requireTenant("branch.manage");
   await guarded(BACK, () => setBranchLocation(ctx, id, String(formData.get("location") ?? "")));
+  revalidatePath("/", "layout");
+  redirect(BACK);
+}
+
+export async function setBranchWifiAction(id: string, formData: FormData) {
+  const ctx = await requireTenant("branch.manage");
+  await guarded(BACK, () =>
+    setBranchWifi(ctx, id, {
+      name: String(formData.get("wifiName") ?? ""),
+      password: String(formData.get("wifiPassword") ?? ""),
+      security: String(formData.get("wifiSecurity") ?? "WPA"),
+      hidden: formData.get("wifiHidden") === "on",
+    }),
+  );
   revalidatePath("/", "layout");
   redirect(BACK);
 }

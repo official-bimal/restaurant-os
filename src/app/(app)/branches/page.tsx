@@ -1,6 +1,7 @@
 import { requireTenant } from "@/server/auth";
 import { listBranches } from "@/features/branches/server/service";
-import { createBranchAction, setBranchActiveAction, setBranchLocationAction, updateBranchAction } from "./actions";
+import { WIFI_SECURITY, WIFI_SECURITY_LABEL } from "@/features/guest/wifi";
+import { createBranchAction, setBranchActiveAction, setBranchLocationAction, setBranchWifiAction, updateBranchAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,30 @@ export default async function BranchesPage({ searchParams }: PageProps<"/branche
                   />
                 </label>
                 <button className={smallBtn}>Save location</button>
+              </form>
+              <form action={setBranchWifiAction.bind(null, b.id)} className="flex w-full flex-wrap items-end gap-2 border-t border-stone-100 pt-3">
+                <label className="text-sm">
+                  <span className="block text-xs text-stone-500">Guest Wi-Fi name (blank = none)</span>
+                  <input name="wifiName" defaultValue={b.wifiName ?? ""} maxLength={32} autoComplete="off" className={`w-44 ${field}`} />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-xs text-stone-500">Password (guests see it)</span>
+                  <input name="wifiPassword" defaultValue={b.wifiPassword ?? ""} maxLength={64} autoComplete="off" className={`w-44 ${field}`} />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-xs text-stone-500">Security</span>
+                  <select name="wifiSecurity" defaultValue={b.wifiSecurity} className={field}>
+                    {WIFI_SECURITY.map((s) => (
+                      <option key={s} value={s}>
+                        {WIFI_SECURITY_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex min-h-10 items-center gap-2 text-sm">
+                  <input type="checkbox" name="wifiHidden" defaultChecked={b.wifiHidden} className="h-4 w-4" /> Hidden network
+                </label>
+                <button className={smallBtn}>Save Wi-Fi</button>
               </form>
               <span className="text-sm text-stone-500">{b._count.tables} tables</span>
               {!b.active && <span className="rounded-full bg-stone-100 px-3 py-1 text-xs">Switched off</span>}
