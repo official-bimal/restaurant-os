@@ -99,6 +99,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       items: [
         ...(can(ctx.role, "report.view") ? [{ href: "/reports", label: "Reports", icon: "reports", tone: "emerald" as const }] : []),
         ...(can(ctx.role, "bills.view") ? [{ href: "/bills", label: "Bills", icon: "bills", tone: "emerald" as const }] : []),
+        ...(can(ctx.role, "books.view") ? [{ href: "/accounting", label: "Accounts", icon: "reports", tone: "emerald" as const }] : []),
       ],
     },
     {

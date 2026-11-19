@@ -214,6 +214,8 @@ model Business {
   ownerAlerts      OwnerAlert[]
   numberBlocks     OfflineNumberBlock[]
   invoiceGaps      InvoiceGap[]
+  accounts         Account[]
+  journalEntries   JournalEntry[]
   customerOsLink   CustomerOsLink?
   customerOsEvents CustomerOsEvent[]
   onlineOrders     OnlineOrder[]
@@ -2018,4 +2020,81 @@ model OnlineOrderItem {
   onlineOrder OnlineOrder @relation(fields: [businessId, onlineOrderId], references: [businessId, id], onDelete: Cascade)
 
   @@index([businessId, onlineOrderId])
+}
+
+// --- accounting books -------------------------------------------------------------------------------
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+/// One account in the chart of accounts. `key` marks the ones the system posts to by itself.
+model Account {
+  id         String      @id @default(cuid())
+  businessId String
+  code       String
+  name       String
+  type       AccountType
+  key        String?
+  active     Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines    JournalLine[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, code])
+  @@unique([businessId, key])
+}
+
+/**
+ * One voucher in the journal. Never edited or deleted: a mistake is put right with a reversing entry (`reversesId`).
+ * Entries made by the system from a sale, refund or supplier bill carry `sourceKind` and `sourceId`, which are unique, so each event
+ * is posted once. Numbers run without gaps within a fiscal year (Bikram Sambat, "2083/84").
+ */
+model JournalEntry {
+  id          String   @id @default(cuid())
+  businessId  String
+  branchId    String?
+  fiscalYear  String
+  number      Int
+  /// The business's own date, YYYY-MM-DD.
+  date        String
+  /// JOURNAL, PAYMENT, RECEIPT, CONTRA (typed by a person) or SALE, REFUND, PURCHASE, SUPPLIER_PAYMENT (made by the system) or REVERSAL.
+  voucher     String
+  narration   String
+  sourceKind  String?
+  sourceId    String?
+  reversesId  String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines    JournalLine[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, fiscalYear, number])
+  @@unique([businessId, sourceKind, sourceId])
+  @@unique([businessId, reversesId])
+  @@index([businessId, date])
+}
+
+model JournalLine {
+  id         String  @id @default(cuid())
+  businessId String
+  entryId    String
+  accountId  String
+  debit      Int     @default(0)
+  credit     Int     @default(0)
+  narration  String?
+
+  entry   JournalEntry @relation(fields: [businessId, entryId], references: [businessId, id], onDelete: Cascade)
+  account Account      @relation(fields: [businessId, accountId], references: [businessId, id])
+
+  @@index([businessId, entryId])
+  @@index([businessId, accountId])
 }
