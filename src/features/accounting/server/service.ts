@@ -40,12 +40,14 @@ function cleanText(value: string | undefined | null, max: number, what: string):
 
 /** Creates the standard chart for a business that has none yet. Safe to call again. */
 const chartChecked = new Set<string>();
+/** The standard accounts that are places money is kept. */
+export const MONEY_KEYS = new Set(["CASH", "BANK", "WALLET", "CARD"]);
 
 export async function ensureChart(businessId: string): Promise<void> {
   if (chartChecked.has(businessId)) return;
   if ((await db.account.count({ where: { businessId } })) === 0) {
     await db.account.createMany({
-      data: DEFAULT_CHART.map((a) => ({ businessId, code: a.code, name: a.name, type: a.type, key: a.key ?? null })),
+      data: DEFAULT_CHART.map((a) => ({ businessId, code: a.code, name: a.name, type: a.type, key: a.key ?? null, moneyAccount: MONEY_KEYS.has(a.key ?? "") })),
       skipDuplicates: true,
     });
   } else {
@@ -119,6 +121,8 @@ export interface NewEntry {
   narration: string;
   sourceKind?: string;
   sourceId?: string;
+  entryKind?: string;
+  party?: string;
   reversesId?: string;
   createdById?: string | null;
   lines: { accountId: string; debit: number; credit: number; narration?: string | null }[];
@@ -145,6 +149,8 @@ export async function writeEntry(tx: Tx, e: NewEntry) {
       narration: e.narration,
       sourceKind: e.sourceKind ?? null,
       sourceId: e.sourceId ?? null,
+      entryKind: e.entryKind ?? null,
+      party: e.party ?? null,
       reversesId: e.reversesId ?? null,
       createdById: e.createdById ?? null,
     },
@@ -364,7 +370,7 @@ export interface VoucherLineInput {
   narration?: string;
 }
 
-export async function createVoucher(ctx: TenantContext, input: { voucher: string; date: string; narration: string; lines: VoucherLineInput[] }) {
+export async function createVoucher(ctx: TenantContext, input: { voucher: string; date: string; narration: string; lines: VoucherLineInput[]; entryKind?: string; party?: string }) {
   needManage(ctx);
   if (!MANUAL_VOUCHERS.includes(input.voucher as ManualVoucher)) throw new DomainError("Choose the kind of voucher.");
   if (!isValidDate(input.date)) throw new DomainError("Choose a valid date.");
@@ -396,6 +402,8 @@ export async function createVoucher(ctx: TenantContext, input: { voucher: string
       voucher: input.voucher,
       narration,
       createdById: ctx.userId,
+      entryKind: input.entryKind,
+      party: input.party,
       lines: input.lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit, narration: l.narration?.trim().slice(0, 120) || null })),
     });
     await audit(tx, ctx, "voucher.create", "JournalEntry", e.id, { voucher: e.voucher, number: e.number, fiscalYear: e.fiscalYear });

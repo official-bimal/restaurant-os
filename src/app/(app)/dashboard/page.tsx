@@ -7,6 +7,9 @@ import { getAttendance } from "@/features/payroll/server/time";
 import { localDate } from "@/lib/business-day";
 import { listOpenOrders, listTables } from "@/features/orders/server/service";
 import { getDayReport } from "@/features/reports/server/service";
+import { getDashboardCharts } from "@/features/reports/server/charts";
+import { shortMoney } from "@/features/reports/charts";
+import { BarChart, Donut, LineChart } from "@/components/charts";
 import { inboxCount } from "@/features/guest/server/service";
 import { unresolvedCount } from "@/features/feedback/server/service";
 import { lowStockCount } from "@/features/stock/server/service";
@@ -50,6 +53,7 @@ export default async function DashboardPage() {
     can(ctx.role, "owner.control") ? unseenAlertCount(ctx) : 0,
     showMoney ? getDayReport(ctx) : null,
   ]);
+  const charts = showMoney ? await getDashboardCharts(ctx) : null;
   const attendance = can(ctx.role, "time.manage") ? await getAttendance(ctx, localDate(new Date(), business.timezone)) : null;
 
   const occupied = new Set(orders.map((o) => o.tableId).filter(Boolean)).size;
@@ -114,6 +118,62 @@ export default async function DashboardPage() {
         <Kpi label="Open orders" value={String(orders.length)} hint={orders.length ? "Waiting to be paid" : "Nothing open right now"} />
         {!day && <Kpi label="Tables in use" value={`${occupied} / ${tables.length}`} hint={`${occupancy}% of the floor`} />}
       </section>
+
+
+      {charts && (
+        <section aria-label="Sales charts" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="card p-5 lg:col-span-2">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-semibold">Sales by hour</h2>
+                <span className="text-xs text-stone-500">Today, after refunds</span>
+              </div>
+              <BarChart values={charts.byHour} labels={charts.byHour.map((_, h) => String(h).padStart(2, "0"))} labelEvery={3} ariaLabel="Sales for each hour of today" />
+            </div>
+            <div className="card p-5">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-semibold">How customers paid</h2>
+                <span className="text-xs text-stone-500">Today</span>
+              </div>
+              {charts.methods.length === 0 ? (
+                <p className="rounded-xl bg-stone-50 p-6 text-center text-sm text-stone-500">No payments yet today.</p>
+              ) : (
+                <Donut slices={charts.methods} centre={shortMoney(charts.methodsTotal)} ariaLabel="Share of today's payments by method" format={formatNpr} />
+              )}
+            </div>
+          </div>
+          <div className="card p-5">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-semibold">This week and last week</h2>
+              <p className="text-sm text-stone-600">
+                <strong>{formatNpr(charts.week.thisTotal)}</strong> in the last 7 days
+                {charts.week.changePercent !== null && (
+                  <span className={`ml-2 rounded px-2 py-0.5 text-xs font-medium ${charts.week.changePercent >= 0 ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
+                    {charts.week.changePercent >= 0 ? "+" : ""}
+                    {charts.week.changePercent}% on the 7 days before
+                  </span>
+                )}
+              </p>
+            </div>
+            <LineChart
+              ariaLabel="Daily sales for the last 7 days against the 7 days before"
+              labels={charts.week.thisWeek.map((d) => new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }))}
+              series={[
+                { name: "Last 7 days", values: charts.week.thisWeek.map((d) => d.amount), color: "#0f857a" },
+                { name: "The 7 days before", values: charts.week.lastWeek.map((d) => d.amount), color: "#a8a29e", dashed: true },
+              ]}
+            />
+            <div className="mt-2 flex gap-4 text-xs text-stone-600">
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-5 bg-[#0f857a]" /> Last 7 days
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-0 w-5 border-t-2 border-dashed border-stone-400" /> The 7 days before ({formatNpr(charts.week.lastTotal)})
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {attention.length > 0 && (
         <section aria-label="Needs attention">

@@ -1,46 +1,13 @@
-import Link from "next/link";
 import { isValidDate } from "@/lib/business-day";
 import { bsText } from "@/features/accounting/fiscal";
 import { formatNpr } from "@/features/billing/calc";
 
 export const field = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-base";
 
-const TABS = [
-  { href: "/accounting", label: "Overview" },
-  { href: "/accounting/daybook", label: "Daybook" },
-  { href: "/accounting/voucher", label: "New voucher" },
-  { href: "/accounting/ledger", label: "Ledger" },
-  { href: "/accounting/trial-balance", label: "Trial balance" },
-  { href: "/accounting/profit-loss", label: "Profit and loss" },
-  { href: "/accounting/balance-sheet", label: "Balance sheet" },
-  { href: "/accounting/accounts", label: "Chart of accounts" },
-  { href: "/accounting/sales-book", label: "Sales book" },
-  { href: "/accounting/purchase-book", label: "Purchase book" },
-  { href: "/accounting/vat", label: "VAT summary" },
-  { href: "/accounting/tds", label: "TDS" },
-  { href: "/accounting/reconcile", label: "Bank reconciliation" },
-  { href: "/accounting/assets", label: "Fixed assets" },
-  { href: "/accounting/budget", label: "Budget" },
-  { href: "/accounting/opening-balances", label: "Opening balances" },
-  { href: "/accounting/year-end", label: "Year-end" },
-  { href: "/accounting/audit-log", label: "Audit log" },
-];
-
+/** The Accounts menu now lives in the layout beside every page, so the old tab row draws nothing. */
 export function AccountingTabs({ current }: { current: string }) {
-  return (
-    <nav aria-label="Accounting" className="flex gap-1 overflow-x-auto pb-1">
-      {TABS.map((t) => (
-        <Link
-          key={t.href}
-          href={t.href}
-          aria-current={t.href === current ? "page" : undefined}
-          className={`min-h-9 shrink-0 rounded-lg px-3 py-1.5 text-sm ${t.href === current ? "bg-teal-700 text-white" : "border border-stone-300 text-stone-700"}`}
-        >
-          {t.label}
-        </Link>
-      ))}
-    </nav>
-  );
+  void current;
+  return null;
 }
 
 /** A date range chosen on the page (GET form), falling back to the given defaults. */

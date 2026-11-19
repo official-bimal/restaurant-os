@@ -2070,14 +2070,16 @@ enum AccountType {
 
 /// One account in the chart of accounts. `key` marks the ones the system posts to by itself.
 model Account {
-  id         String      @id @default(cuid())
-  businessId String
-  code       String
-  name       String
-  type       AccountType
-  key        String?
-  active     Boolean     @default(true)
-  createdAt  DateTime    @default(now())
+  id           String      @id @default(cuid())
+  businessId   String
+  code         String
+  name         String
+  type         AccountType
+  key          String?
+  active       Boolean     @default(true)
+  /// A place money is kept (cash drawer, a bank, a wallet): it appears under Cash and Banks and can be chosen when money comes in or goes out.
+  moneyAccount Boolean     @default(false)
+  createdAt    DateTime    @default(now())
 
   business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   lines    JournalLine[]
@@ -2105,6 +2107,10 @@ model JournalEntry {
   narration   String
   sourceKind  String?
   sourceId    String?
+  /// For entries made on the easy forms: INCOME, EXPENSE, PAYMENT_IN, PAYMENT_OUT or TRANSFER.
+  entryKind   String?
+  /// Who the money came from or went to, as typed (a customer, supplier or other name).
+  party       String?
   reversesId  String?
   createdById String?
   createdAt   DateTime @default(now())

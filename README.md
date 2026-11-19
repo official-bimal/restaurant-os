@@ -181,3 +181,15 @@ Limits: ingredient cost uses today's average cost, not the cost on the day of th
 **Dashboard.** A greeting and the main actions (New order, Quick order, Kitchen), four numbers for today (sales, bills, average bill, open orders), a "Needs attention" row of the things waiting for someone (online orders, guest requests, hukkas running long, table requests, things to check, low stock, low ratings), open orders, the floor and best sellers, and then **Everything in one place**: every feature the person can use, in the same sections as the sidebar, each with one line saying what it is for.
 
 **Order screen.** Dishes show as photo cards with a name, price and an Add button (switch to "List" for the compact list). Dishes without a photo show a coloured letter until a photo is added (Menu, "Add many photos at once").
+
+## Transactions, easy entries, cash and banks, charts
+
+**Accounts menu.** Every Accounts page now sits beside one grouped menu (Money, Books, Tax, Period end), a list down the side on a computer and a row you slide along on a phone.
+
+**Transactions.** One list of everything in the books in plain words: Sales, Sales return, Purchase, Income, Expense, Payment in, Payment out, Transfer, and Journal for the rest. Six totals sit above it (Sales after returns, Purchase, Income, Expenses, Payment in, Payment out) and follow the filters: dates, type, which cash/bank/wallet it went through, status and a search on name or details. Each row shows the BS date, who made it ("System" for sales and bills the software posted itself), the account it went through, and whether it was reversed (a reversed entry counts for nothing in the totals).
+
+**Easy entries.** **Add an entry** (owner): Income, Expense, Payment in, Payment out and Transfer as a short form (date, amount, which account, what for, who). It posts a balanced voucher underneath, so profit and loss, the balance sheet and the ledger all follow. Income and expense use your income and expense accounts; payment in settles what customers owe (credit sales); payment out settles what is owed to suppliers; a transfer moves money between two of your own accounts. A mistake is reversed from the Day book, never edited.
+
+**Cash and banks.** Cash in hand, bank, QR wallet and card settlements are money accounts, each with its balance now. The owner can add more banks and wallets. Below, receipts and payments for any period are laid out by account (columns) and by kind of money in or out (rows: net sales, income, payment in, transfers, expenses, payment out and so on), with the balance brought forward and carried forward. The carried-forward balances agree with the ledger.
+
+**Dashboard charts** (owner and manager): sales by hour for today, how customers paid today as a ring, and the last 7 days against the 7 before as two lines, with the change in percent. All are bills paid less credit notes for the branch you work in, drawn as plain SVG, so they need no extra download.
