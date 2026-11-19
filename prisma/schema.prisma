@@ -222,6 +222,8 @@ model Business {
   reservations     Reservation[]
   deals            Deal[]
   stampPrograms    StampProgram[]
+  paymentSettings  PaymentSetting[]
+  paymentIntents   PaymentIntent[]
   budgets          Budget[]
   journalEntries   JournalEntry[]
   customerOsLink   CustomerOsLink?
@@ -538,6 +540,10 @@ model Payment {
   invoiceId  String
   method     PaymentMethod
   amount     Int
+  /// The wallet, bank or card service it went through, when known (a QR or card payment).
+  provider   PayProvider?
+  /// The service's own reference for it (a transaction id), so the payment can be found in their records.
+  reference  String?
   createdAt  DateTime      @default(now())
 
   invoice Invoice @relation(fields: [businessId, invoiceId], references: [businessId, id], onDelete: Cascade)
@@ -2354,4 +2360,83 @@ model StampRedemption {
 
   @@unique([businessId, invoiceId, programId])
   @@index([businessId, customerId, programId])
+}
+
+// --- online payment services ---------------------------------------------------------------------------
+
+/// The ways a customer can pay besides cash. ESEWA and KHALTI can be started and checked by the software; the rest are recorded by hand.
+enum PayProvider {
+  ESEWA
+  KHALTI
+  FONEPAY
+  CONNECTIPS
+  IMEPAY
+  CARD
+}
+
+enum IntentStatus {
+  CREATED
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+/// One business's set-up for one payment service: on or off, test or live, its merchant code and (sealed) secret key.
+model PaymentSetting {
+  id           String      @id @default(cuid())
+  businessId   String
+  provider     PayProvider
+  enabled      Boolean     @default(false)
+  /// TEST uses the service's sandbox; LIVE moves real money.
+  mode         String      @default("TEST")
+  /// The merchant or product code the service gave you (eSewa: the product code).
+  merchantCode String?
+  /// The secret key, encrypted (see lib/secretbox). Never shown again once saved.
+  secretSealed String?
+  updatedAt    DateTime    @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, provider])
+}
+
+/**
+ * One attempt to take one bill's payment through a payment service. The customer pays on their own phone; the software then asks the service
+ * whether it was really paid (never trusting the customer's return to the page), and only then lets the bill be completed.
+ */
+model PaymentIntent {
+  id          String       @id @default(cuid())
+  businessId  String
+  branchId    String
+  orderId     String
+  provider    PayProvider
+  /// What was asked for, in paisa. The bill must still come to exactly this when it is completed.
+  amount      Int
+  status      IntentStatus @default(CREATED)
+  /// Public link token for the customer's pay page.
+  token       String       @unique
+  /// Our reference sent to the service (eSewa transaction_uuid; Khalti purchase_order_id).
+  uuid        String       @unique
+  /// The service's id for the attempt (Khalti pidx).
+  providerRef String?
+  /// The service's reference for a completed payment (eSewa transaction_code, Khalti transaction_id).
+  reference   String?
+  /// Where to send the customer (Khalti payment_url).
+  payUrl      String?
+  /// The bill settings the cashier chose, to complete the bill exactly as shown.
+  checkout    Json?
+  failReason  String?
+  createdById String?
+  createdAt   DateTime     @default(now())
+  expiresAt   DateTime
+  paidAt      DateTime?
+  /// Set when the bill was completed from this payment: it cannot be used for another bill.
+  consumedAt  DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, orderId])
+  @@index([businessId, status])
 }

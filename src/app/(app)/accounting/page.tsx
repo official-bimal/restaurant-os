@@ -50,7 +50,7 @@ export default async function AccountingPage() {
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {links.map((l) => (
-          <Link key={l.href} href={l.href} className="card block p-4 hover:border-teal-600">
+          <Link key={l.href} href={l.href} className="card block p-4 hover:border-brand-600">
             <p className="font-medium">{l.title}</p>
             <p className="text-sm text-stone-600">{l.text}</p>
           </Link>

@@ -19,7 +19,7 @@ export default async function PurchaseBookPage({ searchParams }: PageProps<"/acc
       <RangeForm from={from} to={to} />
       <p className="text-sm text-stone-600">
         Supplier bills entered under Stock, bills. Enter the VAT inside each bill and the supplier&apos;s PAN so this book and the VAT summary are complete.{" "}
-        <a className="text-teal-700 underline" href={`/accounting/export/purchase?from=${from}&to=${to}`}>
+        <a className="text-brand-700 underline" href={`/accounting/export/purchase?from=${from}&to=${to}`}>
           Download CSV
         </a>
       </p>

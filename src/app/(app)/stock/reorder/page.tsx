@@ -65,7 +65,7 @@ export default async function ReorderPage({ searchParams }: PageProps<"/stock/re
             ))}
           </select>
         </label>
-        <button className="min-h-10 rounded-lg bg-teal-700 px-4 text-sm font-medium text-white">Show</button>
+        <button className="min-h-10 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white">Show</button>
       </form>
       <p className="text-xs text-stone-500">Use is averaged over {plan.dataDays} day{plan.dataDays === 1 ? "" : "s"} of sales records.{plan.dataDays < plan.windowDays ? " There is not a full window of history yet, so the rates are rough." : ""}</p>
 
@@ -131,7 +131,7 @@ export default async function ReorderPage({ searchParams }: PageProps<"/stock/re
                 </select>
               </label>
             )}
-            <button className="min-h-10 rounded-lg bg-teal-700 px-4 text-sm font-medium text-white">Make a draft order</button>
+            <button className="min-h-10 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white">Make a draft order</button>
           </form>
         </section>
       ))}

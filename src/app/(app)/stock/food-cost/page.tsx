@@ -49,7 +49,7 @@ export default async function FoodCostPage({ searchParams }: PageProps<"/stock/f
           Target food cost (%)
           <input name="target" inputMode="decimal" defaultValue={String(target)} className={`${input} w-24`} />
         </label>
-        <button className="min-h-10 rounded-lg bg-teal-700 px-4 text-sm font-medium text-white">Show</button>
+        <button className="min-h-10 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white">Show</button>
       </form>
       <p className="text-sm text-stone-600">
         This branch only, before VAT and service charge. Ingredient cost comes from each dish&apos;s recipe at today&apos;s average ingredient cost. A restaurant usually aims for about 25% to 35%.

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Restaurant OS", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = { themeColor: "#0f857a", viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#4f46e5", viewportFit: "cover" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

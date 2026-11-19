@@ -5,5 +5,5 @@ export async function GET(_req: Request, ctx: { params: Promise<{ spec: string }
   const { spec } = await ctx.params;
   const parsed = parseIconSpec(spec);
   if (!parsed) return new Response("Not found", { status: 404 });
-  return drawIcon({ letter: "R", spec: parsed, background: "#0f857a" });
+  return drawIcon({ letter: "R", spec: parsed, background: "#4f46e5" });
 }

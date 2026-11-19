@@ -19,7 +19,7 @@ export default async function SalesBookPage({ searchParams }: PageProps<"/accoun
       <RangeForm from={from} to={to} />
       <p className="text-sm text-stone-600">
         Every bill and credit note, in order, with the VAT on each. Refunds show as negative rows.{" "}
-        <a className="text-teal-700 underline" href={`/accounting/export/sales?from=${from}&to=${to}`}>
+        <a className="text-brand-700 underline" href={`/accounting/export/sales?from=${from}&to=${to}`}>
           Download CSV
         </a>
       </p>

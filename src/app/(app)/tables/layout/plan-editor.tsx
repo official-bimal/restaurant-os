@@ -113,7 +113,7 @@ function AreaPlan({ area }: { area: EditArea }) {
                   aria-label={`${t.label}: drag, or use the arrow keys, to move it`}
                   onPointerDown={(e) => onDown(e, t.id)}
                   onKeyDown={(e) => onKey(e, t.id)}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-xl bg-white p-1 shadow-md ring-1 ring-stone-300 active:cursor-grabbing active:ring-2 active:ring-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-xl bg-white p-1 shadow-md ring-1 ring-stone-300 active:cursor-grabbing active:ring-2 active:ring-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600"
                   style={{ left: `${at.x / 10}%`, top: `${at.y / 10}%`, width: `${planWidthPercent(t.capacity)}%`, minWidth: "4.5rem" }}
                 >
                   <TableDrawing capacity={t.capacity} busy={false} label={t.label} className="mx-auto h-12 w-full" />
@@ -127,7 +127,7 @@ function AreaPlan({ area }: { area: EditArea }) {
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={save} disabled={pending || !dirty} className="min-h-11 rounded-lg bg-teal-700 px-5 font-medium text-white disabled:opacity-50">
+            <button type="button" onClick={save} disabled={pending || !dirty} className="min-h-11 rounded-lg bg-brand-600 px-5 font-medium text-white disabled:opacity-50">
               {pending ? "Saving…" : "Save plan"}
             </button>
             <button type="button" onClick={tidy} disabled={pending} className="min-h-11 rounded-lg border border-stone-300 px-4 text-sm">

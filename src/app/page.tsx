@@ -16,7 +16,7 @@ const FEATURES = [
   { icon: "stock", tone: "bg-amber-100 text-amber-600", title: "Stock and recipes", text: "Know what a dish costs, see stock fall as you sell, get low-stock alerts, order from suppliers and track what you owe them." },
   { icon: "truck", tone: "bg-orange-100 text-orange-600", title: "Delivery and riders", text: "Fees by distance, rider accounts, a live map, runs with several stops, and cash hand-ins tracked to the paisa." },
   { icon: "customers", tone: "bg-pink-100 text-pink-600", title: "Loyalty and campaigns", text: "Points that earn and spend themselves, birthday and win-back messages, and a record of who came back because of them." },
-  { icon: "reports", tone: "bg-teal-100 text-teal-600", title: "Reports you trust", text: "Daily sales, day close with cash count, best sellers, food cost, and a combined view across all your branches." },
+  { icon: "reports", tone: "bg-brand-100 text-brand-700", title: "Reports you trust", text: "Daily sales, day close with cash count, best sellers, food cost, and a combined view across all your branches." },
   { icon: "clock", tone: "bg-slate-200 text-slate-600", title: "Staff and attendance", text: "Staff clock in at the cafe from their phone, you get told when they arrive and leave, and hours turn into payroll at month end." },
 ];
 

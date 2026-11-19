@@ -51,7 +51,7 @@ export default async function AssetsPage({ searchParams }: PageProps<"/accountin
               <option value="OWED">Still owed (on credit)</option>
             </select>
           </label>
-          <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Add asset</button>
+          <button className="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Add asset</button>
         </form>
       )}
       <section className="card overflow-x-auto p-4">
@@ -105,7 +105,7 @@ export default async function AssetsPage({ searchParams }: PageProps<"/accountin
             Fiscal year
             <input name="fy" defaultValue={p.fiscalYear} pattern="\d{4}/\d{2}" required className={field} />
           </label>
-          <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Record depreciation for this year</button>
+          <button className="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Record depreciation for this year</button>
           <p className="text-xs text-stone-500">An asset is charged once a year, so running this again only adds assets bought since.</p>
         </form>
       )}

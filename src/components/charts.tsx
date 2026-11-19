@@ -8,7 +8,7 @@ import { niceMax, shortMoney, type Slice } from "@/features/reports/charts";
 const W = 640;
 const H = 220;
 const PAD = { l: 52, r: 12, t: 12, b: 28 };
-const BRAND = "#0f857a";
+const BRAND = "#4f46e5";
 const GRID = "#e7e5e4";
 
 function Axes({ max, ticks = 4 }: { max: number; ticks?: number }) {
@@ -94,7 +94,7 @@ export function LineChart({ series, labels, ariaLabel }: { series: LineSeries[];
   );
 }
 
-const SLICE_COLORS = ["#0f857a", "#f59e0b", "#6366f1", "#ef4444", "#a8a29e"];
+const SLICE_COLORS = ["#4f46e5", "#f59e0b", "#10b981", "#ef4444", "#a8a29e"];
 
 /** A ring split by share, with the biggest share first and a legend beside it. */
 export function Donut({ slices, centre, ariaLabel, format }: { slices: Slice[]; centre: string; ariaLabel: string; format: (paisa: number) => string }) {
@@ -123,11 +123,11 @@ export function Donut({ slices, centre, ariaLabel, format }: { slices: Slice[]; 
       </svg>
       <ul className="w-full min-w-0 space-y-1.5 text-sm">
         {slices.map((s, i) => (
-          <li key={s.label} className="flex items-center gap-2">
+          <li key={s.label} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="size-3 shrink-0 rounded-sm" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} aria-hidden="true" />
-            <span className="flex-1">{s.label}</span>
+            <span className="min-w-0 flex-1 truncate">{s.label}</span>
             <span className="tabular-nums text-stone-500">{s.percent}%</span>
-            <span className="w-24 text-right font-medium tabular-nums">{format(s.amount)}</span>
+            <span className="min-w-0 break-words text-right font-medium tabular-nums">{format(s.amount)}</span>
           </li>
         ))}
       </ul>

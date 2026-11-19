@@ -159,13 +159,13 @@ export default async function DashboardPage() {
               ariaLabel="Daily sales for the last 7 days against the 7 days before"
               labels={charts.week.thisWeek.map((d) => new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }))}
               series={[
-                { name: "Last 7 days", values: charts.week.thisWeek.map((d) => d.amount), color: "#0f857a" },
+                { name: "Last 7 days", values: charts.week.thisWeek.map((d) => d.amount), color: "#4f46e5" },
                 { name: "The 7 days before", values: charts.week.lastWeek.map((d) => d.amount), color: "#a8a29e", dashed: true },
               ]}
             />
             <div className="mt-2 flex gap-4 text-xs text-stone-600">
               <span className="flex items-center gap-1.5">
-                <span className="h-0.5 w-5 bg-[#0f857a]" /> Last 7 days
+                <span className="h-0.5 w-5 bg-[#4f46e5]" /> Last 7 days
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-0 w-5 border-t-2 border-dashed border-stone-400" /> The 7 days before ({formatNpr(charts.week.lastTotal)})

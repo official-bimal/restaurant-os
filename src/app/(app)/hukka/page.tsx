@@ -53,7 +53,7 @@ export default async function HukkaPage({ searchParams }: PageProps<"/hukka">) {
               Alert after (min)
               <input name="alert" type="number" min={15} max={240} defaultValue={60} className="ml-1 w-16 rounded border border-stone-300 px-1 py-1 text-sm" />
             </label>
-            <button className="min-h-10 rounded-lg bg-teal-700 px-4 font-medium text-white">Start timer</button>
+            <button className="min-h-10 rounded-lg bg-brand-600 px-4 font-medium text-white">Start timer</button>
           </form>
         ))}
       </section>

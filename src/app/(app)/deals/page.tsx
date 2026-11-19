@@ -121,7 +121,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/deals">) {
             ))}
           </div>
         </fieldset>
-        <button className="min-h-11 rounded-lg bg-teal-700 px-5 font-medium text-white">Save deal</button>
+        <button className="min-h-11 rounded-lg bg-brand-600 px-5 font-medium text-white">Save deal</button>
       </form>
 
       <section className="space-y-2">

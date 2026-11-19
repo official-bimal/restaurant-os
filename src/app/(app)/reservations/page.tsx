@@ -127,12 +127,12 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
                           ))}
                         </select>
                       </label>
-                      <button className="min-h-9 rounded-lg bg-teal-700 px-3 text-sm font-medium text-white">Confirm</button>
+                      <button className="min-h-9 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white">Confirm</button>
                     </form>
                   )}
                   {r.status === "CONFIRMED" && (
                     <form action={reservationStatusAction.bind(null, r.id, "SEATED", date)}>
-                      <button className="min-h-9 rounded-lg bg-teal-700 px-3 text-sm font-medium text-white">Seated</button>
+                      <button className="min-h-9 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white">Seated</button>
                     </form>
                   )}
                   {r.status === "CONFIRMED" && (
@@ -186,7 +186,7 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
             <input name="note" maxLength={200} className={field} />
           </label>
         </div>
-        <button className="min-h-11 rounded-lg bg-teal-700 px-5 font-medium text-white">Add booking for {date}</button>
+        <button className="min-h-11 rounded-lg bg-brand-600 px-5 font-medium text-white">Add booking for {date}</button>
       </form>
     </div>
   );

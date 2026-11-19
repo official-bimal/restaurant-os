@@ -35,7 +35,7 @@ export default async function YearEndPage({ searchParams }: PageProps<"/accounti
             <input name="fy" defaultValue={justEnded} pattern="\d{4}/\d{2}" required className={field} />
           </label>
           <p className="text-xs text-stone-500">{justEnded} runs from {range.from} to {range.to}.</p>
-          <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Close the year</button>
+          <button className="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Close the year</button>
         </form>
       )}
       <section className="card p-4">

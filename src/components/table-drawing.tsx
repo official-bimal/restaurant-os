@@ -3,8 +3,8 @@ import { tableShape } from "@/lib/table-shape";
 /** One table drawn with its chairs, from above. Round for small parties, long for big ones. Free tables are grey; busy ones are teal. */
 export function TableDrawing({ capacity, busy, label, className = "mx-auto h-24 w-full" }: { capacity: number; busy: boolean; label: string; className?: string }) {
   const shape = tableShape(capacity);
-  const body = busy ? "#0f857a" : "#e7e5e4";
-  const chair = busy ? "#6cc4ba" : "#d0cdca";
+  const body = busy ? "#4f46e5" : "#e7e5e4";
+  const chair = busy ? "#a5b4fc" : "#d0cdca";
   return (
     <svg viewBox={`0 0 ${shape.width} ${shape.height}`} className={className} aria-hidden="true">
       {shape.seats.map((s, i) => (

@@ -37,7 +37,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
               ))}
             </select>
           </label>
-          <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Add account</button>
+          <button className="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Add account</button>
         </form>
       )}
       {ACCOUNT_TYPES.map((t) => (

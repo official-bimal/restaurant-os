@@ -67,7 +67,7 @@ export default async function StampsPage({ searchParams }: PageProps<"/stamps">)
             ))}
           </div>
         </fieldset>
-        <button className="min-h-11 rounded-lg bg-teal-700 px-5 font-medium text-white">Save card</button>
+        <button className="min-h-11 rounded-lg bg-brand-600 px-5 font-medium text-white">Save card</button>
       </form>
 
       <section className="space-y-2">

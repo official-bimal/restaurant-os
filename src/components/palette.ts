@@ -13,5 +13,5 @@ export const TONES: Record<Tone, { tile: string; text: string; activeBg: string;
   pink: { tile: "bg-pink-100 text-pink-600", text: "text-pink-700", activeBg: "bg-pink-50", bar: "bg-pink-500" },
   emerald: { tile: "bg-emerald-100 text-emerald-600", text: "text-emerald-700", activeBg: "bg-emerald-50", bar: "bg-emerald-500" },
   slate: { tile: "bg-slate-200 text-slate-600", text: "text-slate-700", activeBg: "bg-slate-100", bar: "bg-slate-500" },
-  teal: { tile: "bg-teal-100 text-teal-600", text: "text-teal-700", activeBg: "bg-teal-50", bar: "bg-teal-500" },
+  teal: { tile: "bg-brand-100 text-brand-700", text: "text-brand-700", activeBg: "bg-brand-50", bar: "bg-brand-500" },
 };

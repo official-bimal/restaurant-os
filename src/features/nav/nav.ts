@@ -112,6 +112,7 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
       items: [
         ...when(can(r, "branch.manage") || can(r, "owner.control") || can(r, "print.manage"), { href: "/settings", label: "Settings", icon: "extras", description: "Business setup and connections" }),
         ...when(can(r, "owner.control"), { href: "/owner", label: "Owner control", icon: "reports", description: "Daily summary and things to check", badge: c.ownerAlerts, badgeTone: "alert" }),
+        ...when(can(r, "owner.control"), { href: "/settings/payments", label: "Payments", icon: "bills", description: "eSewa, Khalti and other ways customers pay" }),
         ...when(can(r, "print.manage"), { href: "/printing", label: "Printing", icon: "bills", description: "Receipt and kitchen printers" }),
         ...when(can(r, "owner.control"), { href: "/customer-os", label: "Customer OS", icon: "customers", description: "Link to your customer and loyalty system" }),
         ...when(can(r, "branch.manage") && i.multiBranch, { href: "/branches", label: "Branches", icon: "branches", description: "Your locations" }),

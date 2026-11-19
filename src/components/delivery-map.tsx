@@ -53,7 +53,7 @@ export function DeliveryMap({
 
         {b && (
           <g>
-            <rect x={b.x - 8} y={b.y - 8} width="16" height="16" rx="4" fill="#0f857a" stroke="#fff" strokeWidth="2" />
+            <rect x={b.x - 8} y={b.y - 8} width="16" height="16" rx="4" fill="#4f46e5" stroke="#fff" strokeWidth="2" />
             <text x={b.x} y={b.y - 14} textAnchor="middle" fontSize="11" fontWeight="600" fill="#0e6a63">
               {branchLabel}
             </text>

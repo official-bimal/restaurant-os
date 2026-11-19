@@ -47,7 +47,7 @@ export default async function ReconcilePage({ searchParams }: PageProps<"/accoun
           Balance on the statement (Rs)
           <input name="balance" inputMode="decimal" defaultValue={typeof sp.balance === "string" ? sp.balance : ""} className={field} />
         </label>
-        <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Show</button>
+        <button className="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Show</button>
       </form>
       {rec && (
         <>
@@ -115,7 +115,7 @@ export default async function ReconcilePage({ searchParams }: PageProps<"/accoun
                   Statement date for these lines
                   <input type="date" name="statementDate" required defaultValue={to} className={field} />
                 </label>
-                <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Mark ticked lines as matched</button>
+                <button className="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Mark ticked lines as matched</button>
               </div>
             )}
           </form>

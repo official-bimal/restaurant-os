@@ -71,7 +71,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/accountin
             })}
           </tbody>
         </table>
-        {manage && <button className="mt-3 min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Save budget</button>}
+        {manage && <button className="mt-3 min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Save budget</button>}
       </form>
     </div>
   );

@@ -1,6 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { baseUrlFrom } from "@/features/payments/server/base-url";
+import { cancelIntent, completeFromIntent, createIntent, refreshIntent } from "@/features/payments/server/service";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireTenant } from "@/server/auth";
@@ -170,7 +173,61 @@ export async function checkoutAction(orderId: string, formData: FormData) {
   const back = params.size ? `/orders/${orderId}?${params}` : `/orders/${orderId}`;
   const buyerName = String(formData.get("buyerName") || "").slice(0, 200);
   const buyerPan = String(formData.get("buyerPan") || "").slice(0, 30);
-  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints, rewardId, freeItemId, buyerName, buyerPan, stampProgramId, stampItemId }));
+  // The service and reference the cashier noted go with the QR and card amounts (the payments the software cannot check itself).
+  const payVia = String(formData.get("payVia") || "").slice(0, 20) || undefined;
+  const payRef = String(formData.get("payRef") || "").slice(0, 60) || undefined;
+  const noted = payments.map((p) => (payVia && (p.method === "QR" || p.method === "CARD") ? { ...p, provider: payVia, reference: payRef } : p));
+  await guarded(back, () => checkout(ctx, orderId, { discount, payments: noted, redeemPoints, rewardId, freeItemId, buyerName, buyerPan, stampProgramId, stampItemId }));
+  revalidatePath("/orders", "layout");
+  redirect(`/orders/${orderId}`);
+}
+
+
+// --- paying through eSewa or Khalti ---------------------------------------------------------------
+
+/** Starts a payment through eSewa or Khalti for the bill as it is shown (the cashier's discount and buyer details come along from the form). */
+export async function startGatewayAction(orderId: string, provider: string, formData: FormData) {
+  const ctx = await requireTenant();
+  const back = `/orders/${orderId}`;
+  const pct = Number(formData.get("discountPercent") || 0);
+  const base = baseUrlFrom(await headers());
+  await guarded(back, () =>
+    createIntent(
+      ctx,
+      orderId,
+      provider,
+      {
+        discountPercent: pct,
+        redeemPoints: Math.max(0, Math.floor(Number(formData.get("redeemPoints") || 0)) || 0),
+        stampProgramId: String(formData.get("stampProgramId") || "").slice(0, 100) || undefined,
+        stampItemId: String(formData.get("stampItemId") || "").slice(0, 100) || undefined,
+        buyerName: String(formData.get("buyerName") || "").slice(0, 200) || undefined,
+        buyerPan: String(formData.get("buyerPan") || "").slice(0, 30) || undefined,
+      },
+      base,
+    ),
+  );
+  revalidatePath(back);
+  redirect(back);
+}
+
+export async function refreshIntentAction(orderId: string, intentId: string) {
+  const ctx = await requireTenant();
+  await guarded(`/orders/${orderId}`, () => refreshIntent(ctx, intentId));
+  revalidatePath(`/orders/${orderId}`);
+  redirect(`/orders/${orderId}`);
+}
+
+export async function cancelIntentAction(orderId: string, intentId: string) {
+  const ctx = await requireTenant();
+  await guarded(`/orders/${orderId}`, () => cancelIntent(ctx, intentId));
+  revalidatePath(`/orders/${orderId}`);
+  redirect(`/orders/${orderId}`);
+}
+
+export async function completeIntentAction(orderId: string, intentId: string) {
+  const ctx = await requireTenant();
+  await guarded(`/orders/${orderId}`, () => completeFromIntent(ctx, intentId));
   revalidatePath("/orders", "layout");
   redirect(`/orders/${orderId}`);
 }

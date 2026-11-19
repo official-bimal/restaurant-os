@@ -16,7 +16,7 @@ export function proxy(request: NextRequest) {
   // The public landing page.
   if (pathname === "/") return NextResponse.next();
   if (installFiles.includes(pathname) || pathname.startsWith("/pwa/") || pathname.startsWith("/api/cron/")) return NextResponse.next();
-  if (pathname.startsWith("/login") || pathname.startsWith("/t/") || pathname.startsWith("/o/") || pathname.startsWith("/track/") || pathname.startsWith("/rider/") || pathname.startsWith("/dish/")) {
+  if (pathname.startsWith("/login") || pathname.startsWith("/t/") || pathname.startsWith("/o/") || pathname.startsWith("/pay/") || pathname.startsWith("/api/pay/") || pathname.startsWith("/track/") || pathname.startsWith("/rider/") || pathname.startsWith("/dish/")) {
     return NextResponse.next();
   }
   if (!request.cookies.has("ros_session")) {

@@ -72,7 +72,7 @@ export default async function VoucherPage({ searchParams }: PageProps<"/accounti
             </tbody>
           </table>
         </div>
-        <button className="min-h-11 rounded-lg bg-teal-700 px-5 py-2 font-medium text-white">Record voucher</button>
+        <button className="min-h-11 rounded-lg bg-brand-600 px-5 py-2 font-medium text-white">Record voucher</button>
       </form>
     </div>
   );

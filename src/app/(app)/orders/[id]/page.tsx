@@ -1,4 +1,8 @@
 import { queuePrintAction } from "../../printing/actions";
+import QRCode from "qrcode";
+import { headers } from "next/headers";
+import { baseUrlFrom } from "@/features/payments/server/base-url";
+import { checkoutMethods, listBillIntents } from "@/features/payments/server/service";
 import { getStampOptions } from "@/features/loyalty/server/stamps";
 import { PrintMenu } from "@/components/print-menu";
 import { OrderMenu } from "./order-menu";
@@ -29,6 +33,10 @@ import {
   cancelItemAction,
   assignRiderAction,
   checkoutAction,
+  startGatewayAction,
+  refreshIntentAction,
+  cancelIntentAction,
+  completeIntentAction,
   deliveryStatusAction,
   itemStatusAction,
 } from "../actions";
@@ -92,6 +100,12 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   const riderLocation = locationView(order);
   const mp = mapPoints(order);
   const appUrl = (process.env.APP_URL ?? "").replace(/\/$/, "");
+  // Payment services: which ones the cashier can use, and the payments already started for this bill.
+  const canTakePayment = can(ctx.role, "bill.checkout") && !order.invoice && !closed;
+  const payMethods = canTakePayment ? await checkoutMethods(ctx) : [];
+  const intents = canTakePayment ? await listBillIntents(ctx, id) : [];
+  const payBase = baseUrlFrom(await headers());
+  const intentQr = new Map(await Promise.all(intents.filter((i) => i.status !== "FAILED").map(async (i) => [i.id, await QRCode.toString(`${payBase}/pay/${i.token}`, { type: "svg", margin: 1, errorCorrectionLevel: "M" })] as const)));
   const canRestructure = can(ctx.role, "order.restructure") && !closed;
   // Anyone who can edit may cancel an empty order; food on it needs the void permission.
   const hasFood = order.items.some((i) => i.status !== "CANCELLED");
@@ -769,10 +783,90 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                     </label>
                     <p className="mt-1 text-xs text-stone-500">Cannot be changed after the bill is issued. Leave empty for a normal customer bill.</p>
                   </details>
+                  {payMethods.some((m) => m.kind === "MANUAL") && (
+                    <details className="rounded-lg border border-stone-200 p-2 text-sm">
+                      <summary className="cursor-pointer text-stone-700">Paid by QR or card machine? Note how</summary>
+                      <p className="mt-1 text-xs text-stone-500">Put the amount in the QR or Card box above, choose the service and type the reference the customer or the machine shows. It is kept with the payment.</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <label>
+                          Service
+                          <select name="payVia" defaultValue="" className="mt-1 block w-full rounded-lg border border-stone-300 px-2 py-1.5">
+                            <option value="">Not noted</option>
+                            {payMethods.filter((m) => m.kind === "MANUAL").map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Reference
+                          <input name="payRef" maxLength={60} className="mt-1 block w-full rounded-lg border border-stone-300 px-2 py-1.5" />
+                        </label>
+                      </div>
+                    </details>
+                  )}
                   <button className="min-h-11 w-full rounded-lg bg-green-700 px-4 py-2 font-medium text-white">
                     Take payment
                   </button>
+                  {payMethods.some((m) => m.kind === "API") && (
+                    <div className="space-y-1.5 border-t border-stone-200 pt-3">
+                      <p className="text-xs font-medium text-stone-600">Or let the customer pay on their phone</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {payMethods
+                          .filter((m) => m.kind === "API")
+                          .map((m) => (
+                            <button key={m.id} formAction={startGatewayAction.bind(null, order.id, m.id)} className={`min-h-11 rounded-lg px-3 text-sm font-semibold ${m.chip}`}>
+                              {m.label}
+                              {m.mode === "TEST" && <span className="ml-1 text-[10px] font-normal opacity-80">test</span>}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </form>
+              )}
+              {intents.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {intents.map((i) => (
+                    <div key={i.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm">
+                      <p className="flex items-center justify-between font-medium">
+                        <span>
+                          {i.label}: {formatNpr(i.amount)}
+                        </span>
+                        <span
+                          className={`rounded px-2 py-0.5 text-xs ${i.status === "PAID" ? "bg-emerald-100 text-emerald-800" : i.status === "FAILED" || i.status === "EXPIRED" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}
+                        >
+                          {i.status === "PAID" ? "Paid" : i.status === "FAILED" ? "Not paid" : i.status === "EXPIRED" ? "Expired" : "Waiting for the customer"}
+                        </span>
+                      </p>
+                      {i.status !== "PAID" && i.status !== "FAILED" && i.status !== "EXPIRED" && intentQr.get(i.id) && (
+                        <div className="mt-2 flex flex-col items-center gap-1">
+                          <div className="size-44 rounded-lg bg-white p-1" dangerouslySetInnerHTML={{ __html: intentQr.get(i.id)! }} />
+                          <p className="text-center text-xs text-stone-500">The customer scans this with their phone camera and pays in {i.label}.</p>
+                        </div>
+                      )}
+                      {i.failReason && i.status !== "PAID" && <p className="mt-1 text-xs text-stone-500">{i.failReason}</p>}
+                      {i.reference && <p className="mt-1 text-xs text-stone-600">Reference {i.reference}</p>}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {i.status === "PAID" ? (
+                          <form action={completeIntentAction.bind(null, order.id, i.id)}>
+                            <button className="min-h-10 rounded-lg bg-green-700 px-4 text-sm font-semibold text-white">Complete the bill</button>
+                          </form>
+                        ) : (
+                          <form action={refreshIntentAction.bind(null, order.id, i.id)}>
+                            <button className="min-h-9 rounded-lg border border-stone-300 bg-white px-3 text-sm">Check now</button>
+                          </form>
+                        )}
+                        {i.status !== "PAID" && (
+                          <form action={cancelIntentAction.bind(null, order.id, i.id)}>
+                            <button className="min-h-9 rounded-lg border border-stone-300 bg-white px-3 text-sm text-red-700">Cancel</button>
+                          </form>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </section>
           ) : (

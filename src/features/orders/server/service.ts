@@ -1,4 +1,5 @@
 import { autoQueueKitchenSlip } from "@/features/printing/server/queue";
+type PayProviderValue = "ESEWA" | "KHALTI" | "FONEPAY" | "CONNECTIPS" | "IMEPAY" | "CARD";
 import { resolveStamp } from "@/features/loyalty/server/stamps";
 import { evaluateDeal } from "@/features/billing/server/deals";
 import { combineDiscount } from "@/features/billing/deals";
@@ -313,7 +314,7 @@ export async function cancelItem(ctx: TenantContext, itemId: string, reason: str
 
 export interface CheckoutInput {
   discount: DiscountInput;
-  payments: { method: PaymentMethod; amount: number }[];
+  payments: { method: PaymentMethod; amount: number; /** The wallet, bank or card service it went through, and its reference. */ provider?: string; reference?: string }[];
   /** Loyalty points to spend on this bill (whole redeem blocks). */
   redeemPoints?: number;
   /** A Customer OS reward to use on this bill (its id). Used in Customer OS first, given back if the bill cannot be paid. */
@@ -442,6 +443,9 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
     const earned = planEarn(settings, order, totals.grandTotal - totals.deliveryFee);
 
     const paid = input.payments.reduce((sum, p) => sum + p.amount, 0);
+    if (input.payments.some((p) => p.provider && !["ESEWA", "KHALTI", "FONEPAY", "CONNECTIPS", "IMEPAY", "CARD"].includes(p.provider))) {
+      throw new DomainError("Unknown payment service.");
+    }
     if (input.payments.some((p) => !Number.isInteger(p.amount) || p.amount <= 0)) {
       throw new DomainError("Payment amounts must be positive.");
     }
@@ -516,6 +520,8 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         invoiceId: invoice.id,
         method: p.method,
         amount: p.amount,
+        provider: (p.provider as PayProviderValue | undefined) ?? null,
+        reference: p.reference?.trim().slice(0, 60) || null,
       })),
     });
     await tx.order.update({

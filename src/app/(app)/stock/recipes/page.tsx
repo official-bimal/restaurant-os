@@ -23,7 +23,7 @@ export default async function RecipesPage({ searchParams }: PageProps<"/stock/re
       <p className="text-sm text-stone-600">
         Say how much of each ingredient one portion uses. When a bill is paid, those amounts come off stock, and the cost
         shows here as food cost and margin. Dishes without a recipe use no stock.{" "}
-        <Link href="/stock/food-cost" className="text-teal-700 underline">
+        <Link href="/stock/food-cost" className="text-brand-700 underline">
           See food cost % and which dishes earn most
         </Link>
         .

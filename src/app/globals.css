@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Design tokens. One brand colour (teal) used for the main action and the active menu item;
+ * Design tokens. One brand colour (indigo) used for the main action and the active menu item;
  * everything else is warm neutral. Status colours keep their usual meaning (green ok, amber
  * attention, red problem) so staff can read the floor at a glance.
  */
@@ -19,12 +19,12 @@
 
 /* Not "inline": the brand variables must exist at runtime for the component classes below. */
 @theme {
-  --color-brand-50: #effaf8;
-  --color-brand-100: #d5f3ee;
-  --color-brand-500: #14a392;
-  --color-brand-600: #0f857a;
-  --color-brand-700: #0e6a63;
-  --color-brand-900: #0b3f3c;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-900: #312e81;
 }
 
 body {

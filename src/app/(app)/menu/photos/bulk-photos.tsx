@@ -93,7 +93,7 @@ export function BulkPhotos({ dishes, withPhoto }: { dishes: DishRef[]; withPhoto
               </li>
             ))}
           </ul>
-          <button type="button" onClick={upload} disabled={busy || ready === 0} className="min-h-11 rounded-lg bg-teal-700 px-5 font-medium text-white disabled:opacity-50">
+          <button type="button" onClick={upload} disabled={busy || ready === 0} className="min-h-11 rounded-lg bg-brand-600 px-5 font-medium text-white disabled:opacity-50">
             {busy ? "Uploading…" : `Upload ${ready} photo${ready === 1 ? "" : "s"}`}
           </button>
         </>

@@ -14,7 +14,7 @@ const PILL: Record<TxType, string> = {
   SALES: "bg-emerald-50 text-emerald-800",
   SALES_RETURN: "bg-rose-50 text-rose-800",
   PURCHASE: "bg-amber-50 text-amber-900",
-  INCOME: "bg-teal-50 text-teal-800",
+  INCOME: "bg-brand-50 text-brand-700",
   EXPENSE: "bg-red-50 text-red-800",
   PAYMENT_IN: "bg-sky-50 text-sky-800",
   PAYMENT_OUT: "bg-violet-50 text-violet-800",
