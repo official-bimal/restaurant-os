@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireTenant } from "@/server/auth";
+import { DomainError } from "@/server/errors";
 import { guarded } from "@/server/guarded";
 import {
   addItem,
+  addItems,
   cancelItem,
   checkout,
   assignRider,
@@ -70,6 +72,35 @@ export async function addItemAction(orderId: string, formData: FormData) {
   await guarded(`/orders/${orderId}`, () => addItem(ctx, orderId, input));
   revalidatePath(`/orders/${orderId}`);
   redirect(`/orders/${orderId}`);
+}
+
+const linesSchema = z
+  .array(
+    z.object({
+      menuItemId: z.string().min(1).max(60),
+      quantity: z.number().int().min(1).max(99),
+      addOnIds: z.array(z.string().min(1).max(60)).max(30).optional(),
+    }),
+  )
+  .min(1)
+  .max(40);
+
+export type AddItemsResult = { ok: true; added: number } | { ok: false; error: string };
+
+/** The dishes a waiter picked on their phone, sent in one go. All of them are added, or none (and the message says why). */
+export async function addItemsAction(orderId: string, lines: unknown): Promise<AddItemsResult> {
+  const ctx = await requireTenant();
+  const parsed = linesSchema.safeParse(lines);
+  if (!parsed.success) return { ok: false, error: "Something is wrong with that list. Please try again." };
+  try {
+    const added = await addItems(ctx, orderId, parsed.data);
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+    return { ok: true, added: added.length };
+  } catch (e) {
+    if (e instanceof DomainError) return { ok: false, error: e.message };
+    throw e;
+  }
 }
 
 export async function assignRiderAction(orderId: string, formData: FormData) {

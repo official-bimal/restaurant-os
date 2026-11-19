@@ -1,5 +1,6 @@
 import { queuePrintAction } from "../../printing/actions";
 import { PrintMenu } from "@/components/print-menu";
+import { OrderMenu } from "./order-menu";
 import { CustomerOsPoints } from "@/features/customeros/points";
 import { listBillRewards, rewardUsedOnBill } from "@/features/customeros/server/reward";
 import { getPrintConfig } from "@/features/printing/server/settings";
@@ -24,7 +25,6 @@ import { cancelOrderAction, refundInvoiceAction } from "../void-actions";
 import { formatNpr, type DiscountInput } from "@/features/billing/calc";
 import { nextItemStatuses } from "@/features/orders/status";
 import {
-  addItemAction,
   cancelItemAction,
   assignRiderAction,
   checkoutAction,
@@ -152,7 +152,8 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-6">
+        {/* min-w-0: a grid column grows to fit its widest child unless told otherwise, and the menu's row of category tabs is wide. */}
+        <div className="min-w-0 space-y-6">
           <section className="rounded-2xl bg-white p-4 border border-stone-200 shadow-sm">
             <h2 className="mb-2 font-semibold">Items</h2>
             {order.items.length === 0 ? (
@@ -208,63 +209,16 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
           </section>
 
           {!closed && can(ctx.role, "order.edit") && (
-            <section className="space-y-4 rounded-2xl bg-white p-4 border border-stone-200 shadow-sm">
-              <h2 className="font-semibold">Menu</h2>
-              {menu.map((cat) => (
-                <div key={cat.id}>
-                  <h3 className="mb-1 text-sm font-medium text-stone-500">{cat.name}</h3>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {cat.items.map((mi) => {
-                      const groups = addOns.get(mi.id) ?? [];
-                      if (groups.length === 0) {
-                        return (
-                          <form key={mi.id} action={addItemAction.bind(null, order.id)}>
-                            <input type="hidden" name="menuItemId" value={mi.id} />
-                            <button className="min-h-14 w-full rounded-lg border border-stone-300 p-2 text-left hover:bg-stone-50">
-                              <span className="block text-sm font-medium">{mi.name}</span>
-                              <span className="text-xs text-stone-500">{formatNpr(mi.price)}</span>
-                            </button>
-                          </form>
-                        );
-                      }
-                      // Dishes with choices open a small form: pick the size and extras, then add.
-                      return (
-                        <details key={mi.id} className="col-span-2 rounded-lg border border-orange-200 bg-orange-50/40 p-2 sm:col-span-3">
-                          <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-2">
-                            <span className="text-sm font-medium">{mi.name}</span>
-                            <span className="text-xs text-stone-500">from {formatNpr(mi.price)} · choose options</span>
-                          </summary>
-                          <form action={addItemAction.bind(null, order.id)} className="mt-2 space-y-3 text-sm">
-                            <input type="hidden" name="menuItemId" value={mi.id} />
-                            {groups.map((g) => (
-                              <fieldset key={g.id}>
-                                <legend className="font-medium">
-                                  {g.name} <span className="text-xs font-normal text-stone-500">{g.required ? "required" : "optional"}{g.multiple ? ", pick any" : ", pick one"}</span>
-                                </legend>
-                                <div className="mt-1 flex flex-wrap gap-2">
-                                  {g.choices.map((c, idx) => (
-                                    <label key={c.id} className="flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2">
-                                      <input
-                                        type={g.multiple ? "checkbox" : "radio"}
-                                        name="addOn"
-                                        value={c.id}
-                                        required={g.required && !g.multiple && idx === 0 ? true : undefined}
-                                      />
-                                      {c.name}
-                                      {c.price > 0 && <span className="text-xs text-stone-500">+{formatNpr(c.price)}</span>}
-                                    </label>
-                                  ))}
-                                </div>
-                              </fieldset>
-                            ))}
-                            <button className="min-h-10 rounded-lg bg-brand-600 px-4 font-medium text-white hover:bg-brand-700">Add to order</button>
-                          </form>
-                        </details>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            <section className="rounded-2xl bg-white p-4 border border-stone-200 shadow-sm" aria-label="Menu">
+              <h2 className="mb-1 font-semibold">Add dishes</h2>
+              <OrderMenu
+                orderId={order.id}
+                categories={menu.map((cat) => ({
+                  id: cat.id,
+                  name: cat.name,
+                  items: cat.items.map((mi) => ({ id: mi.id, name: mi.name, price: mi.price, photo: mi.image ? mi.image.updatedAt.getTime() : null, groups: addOns.get(mi.id) ?? [] })),
+                }))}
+              />
             </section>
           )}
         </div>

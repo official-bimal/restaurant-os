@@ -630,3 +630,24 @@ export async function closeTableSittingsInTx(tx: Tx, businessId: string, tableId
             : "This table changed before the order was accepted. Please scan the QR code on your table.", decidedAt: now },
   });
 }
+
+/**
+ * What is waiting for the floor staff at each table of their branch, in a few words, for the floor map: the guest's own order to accept,
+ * or a call for the waiter, the bill or water. The most urgent one shows when a table has several (the bill, then the waiter, then a
+ * guest order, then water).
+ */
+export async function tableAlerts(ctx: TenantContext): Promise<Record<string, string>> {
+  if (!can(ctx.role, "order.edit") || !ctx.branchId) return {};
+  const [submissions, requests] = await Promise.all([
+    db.guestSubmission.findMany({ where: { businessId: ctx.businessId, status: "PENDING", table: { branchId: ctx.branchId } }, select: { tableId: true } }),
+    db.serviceRequest.findMany({ where: { businessId: ctx.businessId, status: "OPEN", table: { branchId: ctx.branchId } }, select: { tableId: true, kind: true } }),
+  ]);
+  const rank: Record<string, number> = { "Wants the bill": 4, "Calling the waiter": 3, "Guest order waiting": 2, "Wants water": 1 };
+  const out: Record<string, string> = {};
+  const offer = (tableId: string, text: string) => {
+    if (!out[tableId] || rank[text]! > rank[out[tableId]!]!) out[tableId] = text;
+  };
+  for (const s of submissions) offer(s.tableId, "Guest order waiting");
+  for (const r of requests) offer(r.tableId, r.kind === "REQUEST_BILL" ? "Wants the bill" : r.kind === "CALL_WAITER" ? "Calling the waiter" : "Wants water");
+  return out;
+}

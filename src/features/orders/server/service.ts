@@ -1,7 +1,7 @@
 import { autoQueueKitchenSlip } from "@/features/printing/server/queue";
 import { db } from "@/server/db";
 import { DomainError } from "@/server/errors";
-import { audit } from "@/server/audit";
+import { audit, type Tx } from "@/server/audit";
 import { scope } from "@/server/branch";
 import { closeTableSittingsInTx } from "@/features/guest/server/service";
 import { assertDayOpen } from "@/features/reports/server/day-lock";
@@ -76,7 +76,7 @@ export async function listMenu(ctx: TenantContext) {
   const [categories, orderable, overrides, hidden] = await Promise.all([
     db.menuCategory.findMany({
       where: { businessId: ctx.businessId },
-      include: { items: { where: { available: true }, orderBy: { name: "asc" } } },
+      include: { items: { where: { available: true }, orderBy: { name: "asc" }, include: { image: { select: { updatedAt: true } } } } },
       orderBy: { sortOrder: "asc" },
     }),
     orderableItemIds(db, ctx.businessId, ctx.branchId),
@@ -183,17 +183,17 @@ export async function createOrder(
   }
 }
 
-export async function addItem(
-  ctx: TenantContext,
-  orderId: string,
-  input: { menuItemId: string; quantity: number; note?: string; addOnIds?: string[] },
-) {
-  need(ctx, "order.edit");
+export interface NewLine {
+  menuItemId: string;
+  quantity: number;
+  note?: string;
+  addOnIds?: string[];
+}
+
+/** One dish onto an order, inside the caller's transaction. Checks the order is open, the dish is offered here, and the choices are real. */
+async function addLineInTx(tx: Tx, ctx: TenantContext, orderId: string, input: NewLine) {
   const { businessId, branchId } = scope(ctx);
-  if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 99) {
-    throw new DomainError("Quantity must be between 1 and 99.");
-  }
-  const created = await db.$transaction(async (tx) => {
+  {
     const order = await tx.order.findFirst({ where: { id: orderId, businessId, branchId } });
     if (!order) throw new DomainError("Order not found.");
     if (order.status === "PAID" || order.status === "CANCELLED" || order.status === "MERGED") {
@@ -230,8 +230,36 @@ export async function addItem(
       addOns: chosen.map((c) => c.name),
     });
     return item;
-  });
+  }
+}
+
+const badQuantity = (n: number) => !Number.isInteger(n) || n < 1 || n > 99;
+
+export async function addItem(ctx: TenantContext, orderId: string, input: NewLine) {
+  need(ctx, "order.edit");
+  const { businessId, branchId } = scope(ctx);
+  if (badQuantity(input.quantity)) throw new DomainError("Quantity must be between 1 and 99.");
+  const created = await db.$transaction((tx) => addLineInTx(tx, ctx, orderId, input));
   // If this business prints kitchen slips by itself, put one in the print queue (never blocks the order).
+  void autoQueueKitchenSlip(businessId, branchId, orderId, ctx.userId);
+  return created;
+}
+
+/**
+ * Several dishes at once (the waiter built a list on their phone and sent it). All or nothing: if one dish is not available, nothing is
+ * added and the message says which. The kitchen gets ONE slip for the whole list, not one per dish.
+ */
+export async function addItems(ctx: TenantContext, orderId: string, lines: NewLine[]) {
+  need(ctx, "order.edit");
+  const { businessId, branchId } = scope(ctx);
+  if (lines.length === 0) throw new DomainError("Pick at least one dish.");
+  if (lines.length > 40) throw new DomainError("That is a lot of dishes at once. Send them in two lists.");
+  if (lines.some((l) => badQuantity(l.quantity))) throw new DomainError("Quantity must be between 1 and 99.");
+  const created = await db.$transaction(async (tx) => {
+    const out = [];
+    for (const line of lines) out.push(await addLineInTx(tx, ctx, orderId, line));
+    return out;
+  });
   void autoQueueKitchenSlip(businessId, branchId, orderId, ctx.userId);
   return created;
 }

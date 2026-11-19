@@ -9,6 +9,8 @@ import { formatNpr } from "@/features/billing/calc";
 import { createOrderAction } from "./actions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GuestInbox } from "./guest-inbox";
+import { TableMap, type MapArea } from "./table-map";
+import { tableAlerts } from "@/features/guest/server/service";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +18,30 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
   const ctx = await requireTenant();
   const { error } = await searchParams;
   const [orders, tables, zones, bands] = await Promise.all([listOpenOrders(ctx), listTables(ctx), activeZones(ctx), activeBands(ctx)]);
-  const busyTables = new Set(orders.map((o) => o.tableId).filter(Boolean));
   // One key per page render: a double tap submits the same key, so only one order is made.
   const idempotencyKey = randomUUID();
+  const alerts = await tableAlerts(ctx);
+  // The floor map: each table, and what is on it right now.
+  const byTable = new Map<string, typeof orders>();
+  for (const o of orders) if (o.tableId) byTable.set(o.tableId, [...(byTable.get(o.tableId) ?? []), o]);
+  const areas: MapArea[] = [];
+  for (const t of tables) {
+    let area = areas.find((a) => a.id === t.area.id);
+    if (!area) areas.push((area = { id: t.area.id, name: t.area.name, tables: [] }));
+    const open = (byTable.get(t.id) ?? []).slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const live = open.flatMap((o) => o.items.filter((i) => i.status !== "CANCELLED"));
+    area.tables.push({
+      id: t.id,
+      label: t.label,
+      capacity: t.capacity,
+      orderId: open[0]?.id ?? null,
+      bills: open.length,
+      items: live.reduce((n, i) => n + i.quantity, 0),
+      total: live.reduce((n, i) => n + i.unitPrice * i.quantity, 0),
+      served: open.length > 0 && open.every((o) => o.status === "SERVED"),
+      alert: alerts[t.id] ?? null,
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -30,12 +53,19 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
         </p>
       )}
 
+      {tables.length > 0 && (
+        <section aria-label="Tables" className="card p-4">
+          <h2 className="mb-3 text-lg font-semibold">Tables</h2>
+          <TableMap areas={areas} keyBase={idempotencyKey} canCreate={can(ctx.role, "order.create")} />
+        </section>
+      )}
+
       {can(ctx.role, "order.create") && (
         <form action={createOrderAction} className="group card space-y-4 p-4">
+          <h2 className="text-lg font-semibold">Takeaway or delivery</h2>
           <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
           <div role="radiogroup" aria-label="Order type" className="flex flex-wrap gap-2">
             {[
-              { value: "DINE_IN", label: "Dine in" },
               { value: "TAKEAWAY", label: "Takeaway" },
               { value: "DELIVERY", label: "Delivery" },
             ].map((t, i) => (
@@ -47,21 +77,6 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
                 {t.label}
               </label>
             ))}
-          </div>
-
-          <div className="hidden group-has-[input[value^=DINE]:checked]:block">
-            <label className="text-sm font-medium">
-              Table
-              <select name="tableId" className="mt-1 block w-full max-w-xs px-3 py-2">
-                <option value="">Choose a table</option>
-                {tables.map((t) => (
-                  <option key={t.id} value={t.id} disabled={busyTables.has(t.id)}>
-                    {t.area.name} · {t.label}
-                    {busyTables.has(t.id) ? " (in use)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
 
           <div className="hidden gap-3 group-has-[input[value=DELIVERY]:checked]:grid sm:grid-cols-3">
