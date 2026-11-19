@@ -163,7 +163,9 @@ export async function checkoutAction(orderId: string, formData: FormData) {
   const freeItemId = String(formData.get("freeItemId") || "").slice(0, 100) || undefined;
   if (rewardId && freeItemId) params.set("free", freeItemId);
   const back = params.size ? `/orders/${orderId}?${params}` : `/orders/${orderId}`;
-  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints, rewardId, freeItemId }));
+  const buyerName = String(formData.get("buyerName") || "").slice(0, 200);
+  const buyerPan = String(formData.get("buyerPan") || "").slice(0, 30);
+  await guarded(back, () => checkout(ctx, orderId, { discount, payments: [...payments], redeemPoints, rewardId, freeItemId, buyerName, buyerPan }));
   revalidatePath("/orders", "layout");
   redirect(`/orders/${orderId}`);
 }

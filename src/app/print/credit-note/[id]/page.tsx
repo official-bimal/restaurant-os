@@ -29,9 +29,12 @@ export default async function PrintCreditNote({ params, searchParams }: PageProp
         {r.pan && <div>PAN: {r.pan}</div>}
       </div>
       <Rule />
-      <div className="text-center font-bold">CREDIT NOTE #{n.number}</div>
-      <Row left={`For invoice #${n.invoice.number}`} right={n.partial ? "part refund" : "final"} />
+      <div className="text-center font-bold">CREDIT NOTE #{r.label}</div>
+      <Row left={`For invoice #${r.invoiceLabel}`} right={n.partial ? "part refund" : "final"} />
       <div>{when}</div>
+      <div>Miti: {r.bsDate} BS</div>
+      {r.buyerName && <div>Buyer: {r.buyerName}</div>}
+      {r.buyerPan && <div>Buyer PAN: {r.buyerPan}</div>}
       <Rule />
       <Row left="Subtotal" right={formatNpr(n.subtotal)} />
       {n.discount > 0 && <Row left="Discount" right={`-${formatNpr(n.discount)}`} />}

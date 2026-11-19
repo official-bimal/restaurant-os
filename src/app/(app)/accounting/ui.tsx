@@ -14,6 +14,10 @@ const TABS = [
   { href: "/accounting/profit-loss", label: "Profit and loss" },
   { href: "/accounting/balance-sheet", label: "Balance sheet" },
   { href: "/accounting/accounts", label: "Chart of accounts" },
+  { href: "/accounting/sales-book", label: "Sales book" },
+  { href: "/accounting/purchase-book", label: "Purchase book" },
+  { href: "/accounting/vat", label: "VAT summary" },
+  { href: "/accounting/audit-log", label: "Audit log" },
 ];
 
 export function AccountingTabs({ current }: { current: string }) {

@@ -27,6 +27,10 @@ describe("postings", () => {
   });
   it("supplier bills and payments balance", () => {
     expect(balanced(supplierBillLines(5_000))).toBe(true);
+    const withVat = supplierBillLines(11_300, 1_300);
+    expect(balanced(withVat)).toBe(true);
+    expect(withVat.find((x) => x.key === "VAT_INPUT")!.debit).toBe(1_300);
+    expect(withVat.find((x) => x.key === "PURCHASES")!.debit).toBe(10_000);
     expect(supplierPaymentLines(5_000, "CHEQUE").find((x) => x.credit)!.key).toBe("BANK");
   });
 });

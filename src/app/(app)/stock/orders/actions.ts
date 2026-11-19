@@ -32,6 +32,7 @@ export async function createSupplierAction(formData: FormData) {
     name: text(200).parse(formData.get("name") ?? ""),
     phone: text(40).parse(formData.get("phone") ?? ""),
     notes: text(400).parse(formData.get("notes") ?? ""),
+    panNumber: text(20).parse(formData.get("panNumber") ?? ""),
   };
   await guarded(LIST, () => createSupplier(ctx, input));
   done(LIST);

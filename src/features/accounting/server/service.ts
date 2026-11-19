@@ -223,7 +223,7 @@ export async function syncPostings(businessId: string): Promise<number> {
           narration: `Purchase from ${b.supplier.name}${b.number ? `, bill ${b.number}` : ""}`,
           sourceKind: "PURCHASE",
           sourceId: b.id,
-          lines: resolve(keys, supplierBillLines(b.amount)),
+          lines: resolve(keys, supplierBillLines(b.amount, b.vatAmount)),
         });
         return 1;
       }).catch(ignoreDuplicate);

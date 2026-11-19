@@ -495,6 +495,11 @@ model Invoice {
   offlineKey      String?
   offlineDeviceId String?
   syncedAt        DateTime?
+  /// Who the bill was made out to, when the buyer asked for it (a business buyer needs its PAN on the bill). Fixed once issued.
+  buyerName       String?
+  buyerPan        String?
+  /// How many times the bill has been printed. The first print is the original; later ones say "copy of original".
+  printCount      Int       @default(0)
 
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   order       Order        @relation(fields: [businessId, orderId], references: [businessId, id])
@@ -1002,6 +1007,8 @@ model Supplier {
   /// E.164, optional.
   phone      String?
   notes      String?
+  /// The supplier's PAN, for the purchase book.
+  panNumber  String?
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 
@@ -1523,8 +1530,10 @@ model SupplierBill {
   /// YYYY-MM-DD.
   billDate        String
   dueDate         String?
-  /// Total on the bill, in paisa.
+  /// Total on the bill, in paisa (VAT included).
   amount          Int
+  /// The VAT inside the total, in paisa (0 when the supplier charged none).
+  vatAmount       Int       @default(0)
   note            String?
   /// The purchase order it is for, if any.
   purchaseOrderId String?

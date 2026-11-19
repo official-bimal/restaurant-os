@@ -1,4 +1,5 @@
 import { autoQueueKitchenSlip } from "@/features/printing/server/queue";
+import { cleanBuyer } from "@/features/billing/ird";
 import { db } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { audit, type Tx } from "@/server/audit";
@@ -315,6 +316,9 @@ export interface CheckoutInput {
   rewardId?: string;
   /** For a free-item reward: which item on the order is free (one unit of it comes off the bill). */
   freeItemId?: string;
+  /** The buyer's name, and PAN if it is a business, to print on the bill. Fixed once the bill is issued. */
+  buyerName?: string;
+  buyerPan?: string;
 }
 
 /** Totals for an order using the business's tax settings, including any loyalty reward being applied. */
@@ -358,6 +362,8 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
   const { businessId, branchId } = scope(ctx);
   let lowStock: { name: string; status: string }[] = [];
   let queuedForCustomerOs = false;
+  const buyer = cleanBuyer(input.buyerName, input.buyerPan);
+  if ("error" in buyer) throw new DomainError(buyer.error);
 
   // A Customer OS reward is used there FIRST (it needs the customer's say-so and can fail). If the bill then cannot be paid, it is given back.
   let used: UsedReward | null = null;
@@ -437,6 +443,8 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
         grandTotal: totals.grandTotal,
         loyaltyDiscount: totals.loyaltyDiscount,
         deliveryFee: totals.deliveryFee,
+        buyerName: buyer.name,
+        buyerPan: buyer.pan,
         customerId: order.customerId,
         pointsEarned: earned,
         pointsRedeemed: plan.points + (used?.consumed ?? 0),

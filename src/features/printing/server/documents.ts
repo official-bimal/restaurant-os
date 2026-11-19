@@ -5,6 +5,7 @@ import { scope } from "@/server/branch";
 import { DomainError } from "@/server/errors";
 import { audit } from "@/server/audit";
 import { groupByStation, receiptLines } from "../receipt";
+import { billDates, copyNote, invoiceLabel } from "@/features/billing/ird";
 
 /**
  * The data behind printed pages. Each document is limited to the business and the branch the person is working in, and
@@ -38,11 +39,20 @@ export async function getReceipt(ctx: TenantContext, invoiceId: string) {
   });
   if (!invoice) throw new DomainError("Invoice not found.");
   const head = await header(businessId, branchId);
-  await db.$transaction((tx) => audit(tx, ctx, "print.receipt", "Invoice", invoice.id, { number: invoice.number }));
+  // The first print is the original; each later one is marked as a copy. The count and the audit entry are written together.
+  const printsBefore = await db.$transaction(async (tx) => {
+    const after = await tx.invoice.update({ where: { businessId_id: { businessId, id: invoice.id } }, data: { printCount: { increment: 1 } }, select: { printCount: true } });
+    await audit(tx, ctx, "print.receipt", "Invoice", invoice.id, { number: invoice.number, print: after.printCount });
+    return after.printCount - 1;
+  });
+  const dates = billDates(invoice.createdAt, head.timezone);
   const order = invoice.order;
   return {
     ...head,
     invoice,
+    label: invoiceLabel(dates.fiscalYear, invoice.number),
+    bsDate: dates.bs,
+    copy: copyNote(printsBefore),
     orderNumber: order.number,
     where: order.type === "DINE_IN" ? (order.table?.label ?? "Dine in") : order.type === "DELIVERY" ? "Delivery" : order.type === "TAKEAWAY" ? "Takeaway" : "Quick bill",
     customer: invoice.customer?.name ?? null,
@@ -56,12 +66,22 @@ export async function getCreditNote(ctx: TenantContext, creditNoteId: string) {
   const { businessId, branchId } = scope(ctx);
   const note = await db.creditNote.findFirst({
     where: { id: creditNoteId, businessId, invoice: { branchId } },
-    include: { refunds: true, invoice: { select: { number: true, grandTotal: true, createdAt: true } } },
+    include: { refunds: true, invoice: { select: { number: true, grandTotal: true, createdAt: true, buyerName: true, buyerPan: true } } },
   });
   if (!note) throw new DomainError("Credit note not found.");
   const head = await header(businessId, branchId);
   await db.$transaction((tx) => audit(tx, ctx, "print.creditNote", "CreditNote", note.id, { number: note.number }));
-  return { ...head, note };
+  const noteDates = billDates(note.createdAt, head.timezone);
+  const invDates = billDates(note.invoice.createdAt, head.timezone);
+  return {
+    ...head,
+    note,
+    label: invoiceLabel(noteDates.fiscalYear, note.number),
+    bsDate: noteDates.bs,
+    invoiceLabel: invoiceLabel(invDates.fiscalYear, note.invoice.number),
+    buyerName: note.invoice.buyerName,
+    buyerPan: note.invoice.buyerPan,
+  };
 }
 
 /** What the kitchen needs to cook for an order: its live items by station, with notes and add-ons. */

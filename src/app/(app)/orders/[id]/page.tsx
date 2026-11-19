@@ -704,6 +704,18 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                       />
                     </label>
                   ))}
+                  <details className="rounded-lg border border-stone-200 p-2 text-sm">
+                    <summary className="cursor-pointer text-stone-700">Bill in a company&apos;s name (PAN bill)</summary>
+                    <label className="mt-2 block">
+                      Buyer name
+                      <input name="buyerName" maxLength={120} className="mt-1 block w-full rounded-lg border border-stone-300 px-2 py-1.5" />
+                    </label>
+                    <label className="mt-2 block">
+                      Buyer PAN (9 digits)
+                      <input name="buyerPan" inputMode="numeric" maxLength={9} pattern="[0-9]{9}" className="mt-1 block w-full rounded-lg border border-stone-300 px-2 py-1.5" />
+                    </label>
+                    <p className="mt-1 text-xs text-stone-500">Cannot be changed after the bill is issued. Leave empty for a normal customer bill.</p>
+                  </details>
                   <button className="min-h-11 w-full rounded-lg bg-green-700 px-4 py-2 font-medium text-white">
                     Take payment
                   </button>

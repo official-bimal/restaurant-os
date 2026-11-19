@@ -89,6 +89,14 @@ export interface ReceiptData {
   branch: string;
   address: string | null;
   invoiceNumber: number;
+  /** The bill's number with its fiscal year, like 2083/84-12. Shown instead of the plain number when given. */
+  label?: string;
+  /** The Nepali (Bikram Sambat) date, YYYY-MM-DD. */
+  bsDate?: string;
+  buyerName?: string | null;
+  buyerPan?: string | null;
+  /** Set on a reprint: the line that marks it as a copy. */
+  copy?: string | null;
   /** Null for a bill made with no connection: it gets its order number when it reaches the server. */
   orderNumber: number | null;
   /** Already formatted in the business's own time zone. */
@@ -119,8 +127,13 @@ export function layoutReceipt(d: ReceiptData, s: LayoutSettings, cols: number): 
   if (s.headerLine) wrap(s.headerLine, cols).forEach((t) => add(center(t, cols)));
   if (s.showPan && d.pan) add(center(`PAN: ${d.pan}`, cols));
   add(rule(cols));
-  rows(`Invoice #${d.invoiceNumber}`, d.orderNumber === null ? "Offline sale" : `Order #${d.orderNumber}`);
+  add(center("TAX INVOICE", cols), { bold: true });
+  if (d.copy) add(center(d.copy, cols), { bold: true });
+  rows(`Invoice #${d.label ?? d.invoiceNumber}`, d.orderNumber === null ? "Offline sale" : `Order #${d.orderNumber}`);
   add(d.when);
+  if (d.bsDate) add(`Miti: ${d.bsDate} BS`);
+  if (d.buyerName) wrap(`Buyer: ${d.buyerName}`, cols).forEach((t) => add(t));
+  if (d.buyerPan) add(`Buyer PAN: ${d.buyerPan}`);
   add(d.where);
   if (s.showCustomer && d.customer) rows(`Customer: ${d.customer}`, "");
   add(rule(cols));
@@ -158,6 +171,11 @@ export interface CreditNoteData {
   branch: string;
   number: number;
   invoiceNumber: number;
+  label?: string;
+  invoiceLabel?: string;
+  bsDate?: string;
+  buyerName?: string | null;
+  buyerPan?: string | null;
   when: string;
   partial: boolean;
   subtotal: number;
@@ -179,9 +197,12 @@ export function layoutCreditNote(d: CreditNoteData, s: LayoutSettings, cols: num
   add(center(d.branch, cols));
   if (s.showPan && d.pan) add(center(`PAN: ${d.pan}`, cols));
   add(rule(cols));
-  add(center(`CREDIT NOTE #${d.number}`, cols), { bold: true });
-  rows(`For invoice #${d.invoiceNumber}`, d.partial ? "part refund" : "final");
+  add(center(`CREDIT NOTE #${d.label ?? d.number}`, cols), { bold: true });
+  rows(`For invoice #${d.invoiceLabel ?? d.invoiceNumber}`, d.partial ? "part refund" : "final");
   add(d.when);
+  if (d.bsDate) add(`Miti: ${d.bsDate} BS`);
+  if (d.buyerName) wrap(`Buyer: ${d.buyerName}`, cols).forEach((t) => add(t));
+  if (d.buyerPan) add(`Buyer PAN: ${d.buyerPan}`);
   add(rule(cols));
   rows("Subtotal", money(d.subtotal));
   if (d.discount > 0) rows("Discount", neg(d.discount));

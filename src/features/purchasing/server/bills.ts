@@ -34,13 +34,15 @@ async function today(businessId: string) {
 
 export async function createBill(
   ctx: TenantContext,
-  input: { supplierId: string; number?: string; billDate: string; dueDate?: string; amount: number; note?: string; purchaseOrderId?: string },
+  input: { supplierId: string; number?: string; billDate: string; dueDate?: string; amount: number; vatAmount?: number; note?: string; purchaseOrderId?: string },
 ) {
   need(ctx);
   const { businessId, branchId } = scope(ctx);
   if (!Number.isInteger(input.amount) || input.amount < 1 || input.amount > MAX_PAISA) {
     throw new DomainError("Enter the bill amount as a number above zero.");
   }
+  const vatAmount = input.vatAmount ?? 0;
+  if (!Number.isInteger(vatAmount) || vatAmount < 0 || vatAmount >= input.amount) throw new DomainError("The VAT must be less than the bill total.");
   if (!isValidDate(input.billDate)) throw new DomainError("Choose a valid bill date.");
   const dueDate = input.dueDate?.trim() || null;
   if (dueDate && !isValidDate(dueDate)) throw new DomainError("Choose a valid due date.");
@@ -70,6 +72,7 @@ export async function createBill(
         billDate: input.billDate,
         dueDate,
         amount: input.amount,
+        vatAmount,
         note,
         purchaseOrderId: input.purchaseOrderId || null,
         createdById: ctx.userId,

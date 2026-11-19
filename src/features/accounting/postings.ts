@@ -79,9 +79,10 @@ export function refundLines(r: RefundInput): Line[] {
 }
 
 /** A supplier's bill: what we bought, and that we now owe for it. */
-export function supplierBillLines(amount: number): Line[] {
+export function supplierBillLines(amount: number, vat = 0): Line[] {
   return tidy([
-    { key: "PURCHASES", debit: amount, credit: 0 },
+    { key: "PURCHASES", debit: amount - vat, credit: 0 },
+    { key: "VAT_INPUT", debit: vat, credit: 0 },
     { key: "PAYABLE", debit: 0, credit: amount },
   ]);
 }

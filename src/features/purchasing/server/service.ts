@@ -43,15 +43,17 @@ export async function listSuppliers(ctx: TenantContext) {
   return db.supplier.findMany({ where: { businessId: ctx.businessId, active: true }, orderBy: { name: "asc" } });
 }
 
-function supplierFields(input: { name: string; phone?: string; notes?: string }) {
+function supplierFields(input: { name: string; phone?: string; notes?: string; panNumber?: string }) {
   const name = cleanText(input.name, 80);
   if (!name) throw new DomainError("Give the supplier a name.");
   const rawPhone = (input.phone ?? "").trim();
   const phone = rawPhone ? normalizePhone(rawPhone) : null;
-  return { name, phone, notes: cleanText(input.notes, 300) };
+  const panNumber = (input.panNumber ?? "").trim();
+  if (panNumber && !/^\d{9}$/.test(panNumber)) throw new DomainError("A PAN has nine digits.");
+  return { name, phone, notes: cleanText(input.notes, 300), panNumber: panNumber || null };
 }
 
-export async function createSupplier(ctx: TenantContext, input: { name: string; phone?: string; notes?: string }) {
+export async function createSupplier(ctx: TenantContext, input: { name: string; phone?: string; notes?: string; panNumber?: string }) {
   need(ctx);
   const f = supplierFields(input);
   const clash = await db.supplier.findFirst({ where: { businessId: ctx.businessId, name: { equals: f.name, mode: "insensitive" } } });
@@ -63,7 +65,7 @@ export async function createSupplier(ctx: TenantContext, input: { name: string; 
   });
 }
 
-export async function updateSupplier(ctx: TenantContext, id: string, input: { name: string; phone?: string; notes?: string }) {
+export async function updateSupplier(ctx: TenantContext, id: string, input: { name: string; phone?: string; notes?: string; panNumber?: string }) {
   need(ctx);
   const f = supplierFields(input);
   const s = await db.supplier.findFirst({ where: { id, businessId: ctx.businessId } });

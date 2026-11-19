@@ -30,8 +30,13 @@ export default async function PrintInvoice({ params, searchParams }: PageProps<"
         {r.pan && <div>PAN: {r.pan}</div>}
       </div>
       <Rule />
-      <Row left={`Invoice #${inv.number}`} right={`Order #${r.orderNumber}`} />
+      <div className="text-center font-bold">TAX INVOICE</div>
+      {r.copy && <div className="text-center font-bold">{r.copy}</div>}
+      <Row left={`Invoice #${r.label}`} right={`Order #${r.orderNumber}`} />
       <div>{when}</div>
+      <div>Miti: {r.bsDate} BS</div>
+      {inv.buyerName && <div>Buyer: {inv.buyerName}</div>}
+      {inv.buyerPan && <div>Buyer PAN: {inv.buyerPan}</div>}
       <div>{r.where}</div>
       {r.customer && <div>Customer: {r.customer}</div>}
       <Rule />

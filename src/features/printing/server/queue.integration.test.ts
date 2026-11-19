@@ -146,7 +146,8 @@ describe("files for a receipt, a credit note and a kitchen slip", () => {
 
     const note = await refundInvoice(a.owner, inv.id, "cold food", { amount: 5_000 });
     const cn = Buffer.from((await renderDocument(a.owner, "credit-note", note.id, "text")).bytes).toString("utf8");
-    expect(cn).toContain(`CREDIT NOTE #${note.number}`);
+    expect(cn).toMatch(new RegExp(String.raw`CREDIT NOTE #\d{4}/\d{2}-${note.number}`));
+    expect(cn).toContain("Miti:");
     expect(cn).toContain("cold food");
 
     await expect(renderDocument(a.waiter, "invoice", inv.id, "pdf")).rejects.toThrow(/permission/);

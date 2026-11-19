@@ -206,6 +206,10 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps<"/s
               <input name="phone" type="tel" placeholder="98XXXXXXXX" className={input} />
             </label>
             <label className="font-medium">
+              PAN (optional)
+              <input name="panNumber" inputMode="numeric" maxLength={9} className={input} />
+            </label>
+            <label className="font-medium">
               Notes (optional)
               <input name="notes" maxLength={300} className={input} />
             </label>
