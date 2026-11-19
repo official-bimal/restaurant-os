@@ -8,6 +8,7 @@ import { fiscalYearRange, toBs, BS_MONTHS } from "../fiscal";
 import { yearlyDepreciation } from "../depreciation";
 import { signed } from "../books";
 import { type Line } from "../postings";
+import { getStockValueReport } from "@/features/stock/server/report";
 import {
   createVoucher,
   ensureChart,
@@ -385,3 +386,48 @@ export async function getTdsReport(ctx: TenantContext, from: string, to: string)
   return { months, total: months.reduce((n, m) => n + m.total, 0) };
 }
 
+
+// ---------------------------------------------------------------------------------------------------
+// stock value
+
+/**
+ * Brings the "stock of food and drink" account in line with what the shelves are worth now (from the stock records at average cost), by
+ * posting the difference against purchases. Supplier bills are posted as purchases when they arrive, so this is what turns "bought" into
+ * "used": do it at the end of each month. Running it twice in a row posts nothing the second time.
+ */
+export async function postStockValue(ctx: TenantContext) {
+  needManage(ctx);
+  await syncPostings(ctx.businessId);
+  const branchCount = await db.branch.count({ where: { businessId: ctx.businessId, active: true } });
+  if (ctx.branchIds.length < branchCount) throw new DomainError("Stock value covers every branch. Ask someone who works in all branches to do this.");
+  await ensureChart(ctx.businessId);
+  const report = await getStockValueReport(ctx);
+  const value = report.totals.value + report.totals.onTheWayValue;
+  const today = await todayOf(ctx.businessId);
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"journal:" + ctx.businessId}))`;
+    const keys = await keyMap(tx, ctx.businessId);
+    const inventoryId = keys.get("INVENTORY");
+    if (!inventoryId) throw new DomainError("The chart of accounts has no stock account.");
+    const sums = await tx.journalLine.aggregate({ where: { businessId: ctx.businessId, accountId: inventoryId }, _sum: { debit: true, credit: true } });
+    const booked = (sums._sum.debit ?? 0) - (sums._sum.credit ?? 0);
+    const diff = value - booked;
+    if (diff === 0) return { posted: 0, value, booked };
+    const closed = await latestClosedDate(tx, ctx.businessId);
+    if (closed && today <= closed) throw new DomainError("The fiscal year is closed.");
+    const lines: Line[] =
+      diff > 0
+        ? [{ key: "INVENTORY", debit: diff, credit: 0 }, { key: "PURCHASES", debit: 0, credit: diff }]
+        : [{ key: "PURCHASES", debit: -diff, credit: 0 }, { key: "INVENTORY", debit: 0, credit: -diff }];
+    const e = await writeEntry(tx, {
+      businessId: ctx.businessId,
+      date: today,
+      voucher: "STOCK",
+      narration: `Stock counted at ${(value / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}: adjusted from the books`,
+      createdById: ctx.userId,
+      lines: resolve(keys, lines),
+    });
+    await audit(tx, ctx, "stock.valuePost", "JournalEntry", e.id, { value, booked, diff });
+    return { posted: diff, value, booked };
+  });
+}

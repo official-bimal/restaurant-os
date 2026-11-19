@@ -3,6 +3,8 @@ import { requireTenant } from "@/server/auth";
 import { formatNpr } from "@/features/billing/calc";
 import { getStockValueReport } from "@/features/stock/server/report";
 import { DomainError } from "@/server/errors";
+import { can } from "@/server/permissions";
+import { postStockValueAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -180,6 +182,23 @@ export default async function StockValuePage({ searchParams }: PageProps<"/stock
           </table>
         )}
       </section>
+      {can(ctx.role, "books.manage") && (
+        <section className="card p-4">
+          <h2 className="font-semibold">Update the books</h2>
+          <p className="mt-1 text-sm text-stone-600">
+            Supplier bills reach the books as purchases when they arrive. At the end of each month, bring the books&apos; stock figure in line with what the shelves are worth now (above), so the profit
+            and loss shows what was <em>used</em> and not just what was bought. Only the difference is posted, so pressing it twice does nothing the second time.
+          </p>
+          {typeof q.posted === "string" && (
+            <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              {q.posted === "0" ? "The books already agree with the stock value." : `Posted a stock adjustment of ${formatNpr(Number(q.posted))}.`}
+            </p>
+          )}
+          <form action={postStockValueAction} className="mt-2">
+            <button className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white">Post stock value to the books</button>
+          </form>
+        </section>
+      )}
     </div>
   );
 }
