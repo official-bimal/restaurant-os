@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { db } from "@/server/db";
 import { requireTenant } from "@/server/auth";
 import { logout } from "@/app/login/actions";
-import { can } from "@/server/permissions";
 import { inboxCount } from "@/features/guest/server/service";
 import { onlineInboxCount } from "@/features/online/server/service";
 import { unresolvedCount } from "@/features/feedback/server/service";
@@ -15,7 +14,8 @@ import { listMyBranches } from "@/features/branches/server/service";
 import { listNotifications } from "@/features/notifications/server/service";
 import { switchBranchAction } from "./branches/actions";
 import { AppShell } from "@/components/app-shell";
-import { NavLinks, type NavGroup } from "@/components/nav-links";
+import { NavLinks, type NavItem } from "@/components/nav-links";
+import { buildNav } from "@/features/nav/nav";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { Icon } from "@/components/icons";
 import { NotificationWatcher } from "@/components/notification-watcher";
@@ -68,64 +68,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const unreadNotifications = notifications.filter((n) => !n.read);
   const urgent = unreadNotifications.filter((n) => n.level === "alert").map((n) => ({ id: n.id, title: n.title }));
 
-  const groups: NavGroup[] = [
-    {
-      label: "Service",
-      items: [
-        { href: "/dashboard", label: "Dashboard", icon: "dashboard", tone: "teal" as const },
-        { href: "/notifications", label: "Notifications", icon: "bell", tone: "rose" as const, badge: unreadNotifications.length, badgeTone: "alert" as const },
-        { href: "/orders", label: "Orders", icon: "orders", tone: "blue" as const, badge: waiting },
-        ...(can(ctx.role, "order.edit") ? [{ href: "/online", label: "Online orders", icon: "orders", tone: "teal" as const, badge: onlineWaiting, badgeTone: "alert" as const }] : []),
-        ...(can(ctx.role, "order.create") && can(ctx.role, "order.edit") ? [{ href: "/quick", label: "Quick order", icon: "orders", tone: "teal" as const }] : []),
-        { href: "/kitchen", label: "Kitchen", icon: "kitchen", tone: "orange" as const },
-        ...(can(ctx.role, "order.edit") ? [{ href: "/dispatch", label: "Dispatch", icon: "truck", tone: "blue" as const }] : []),
-        ...(can(ctx.role, "order.edit") && hukkaOn ? [{ href: "/hukka", label: "Hukka timer", icon: "clock", tone: "amber" as const, badge: hukkaLong, badgeTone: "alert" as const }] : []),
-        ...(can(ctx.role, "order.edit") ? [{ href: "/reservations", label: "Reservations", icon: "tables", tone: "violet" as const, badge: reservationsWaiting, badgeTone: "alert" as const }] : []),
-        ...(can(ctx.role, "menu.manage") ? [{ href: "/deals", label: "Deals", icon: "campaigns", tone: "rose" as const }] : []),
-        ...(can(ctx.role, "floor.manage") ? [{ href: "/tables", label: "Tables", icon: "tables", tone: "violet" as const }] : []),
-        ...(can(ctx.role, "floor.manage") ? [{ href: "/delivery", label: "Delivery pricing", icon: "truck", tone: "orange" as const }] : []),
-      ],
-    },
-    {
-      label: "Catalogue",
-      items: [
-        ...(can(ctx.role, "menu.manage") ? [{ href: "/menu", label: "Menu", icon: "menu", tone: "rose" as const }] : []),
-        ...(can(ctx.role, "stock.view") ? [{ href: "/stock", label: "Stock", icon: "stock", tone: "amber" as const, badge: lowStock }] : []),
-      ],
-    },
-    {
-      label: "Guests",
-      items: [
-        ...(can(ctx.role, "customer.manage") ? [{ href: "/customers", label: "Customers", icon: "customers", tone: "pink" as const }] : []),
-        ...(can(ctx.role, "campaign.manage") ? [{ href: "/campaigns", label: "Campaigns", icon: "campaigns", tone: "violet" as const }] : []),
-        ...(can(ctx.role, "campaign.manage") ? [{ href: "/stamps", label: "Stamp cards", icon: "campaigns", tone: "amber" as const }] : []),
-        ...(can(ctx.role, "feedback.view")
-          ? [{ href: "/feedback", label: "Feedback", icon: "feedback", tone: "amber" as const, badge: lowRatings, badgeTone: "alert" as const }]
-          : []),
-      ],
-    },
-    {
-      label: "Money",
-      items: [
-        ...(can(ctx.role, "report.view") ? [{ href: "/reports", label: "Reports", icon: "reports", tone: "emerald" as const }] : []),
-        ...(can(ctx.role, "bills.view") ? [{ href: "/bills", label: "Bills", icon: "bills", tone: "emerald" as const }] : []),
-        ...(can(ctx.role, "books.view") ? [{ href: "/accounting", label: "Accounts", icon: "reports", tone: "emerald" as const }] : []),
-      ],
-    },
-    {
-      label: "Admin",
-      items: [
-        ...(can(ctx.role, "branch.manage") ? [{ href: "/branches", label: "Branches", icon: "branches", tone: "slate" as const }] : []),
-        ...(can(ctx.role, "staff.manage") ? [{ href: "/staff", label: "Staff", icon: "staff", tone: "slate" as const }] : []),
-        { href: "/time", label: "Time", icon: "clock", tone: "slate" as const },
-        ...(can(ctx.role, "time.manage") ? [{ href: "/attendance", label: "Attendance", icon: "staff", tone: "teal" as const }] : []),
-        ...(can(ctx.role, "owner.control") ? [{ href: "/owner", label: "Owner control", icon: "reports", tone: "rose" as const, badge: ownerAlerts, badgeTone: "alert" as const }] : []),
-        ...(can(ctx.role, "owner.control") ? [{ href: "/customer-os", label: "Customer OS", icon: "staff", tone: "teal" as const }] : []),
-        ...(can(ctx.role, "print.manage") ? [{ href: "/printing", label: "Printing", icon: "bills", tone: "slate" as const }] : []),
-        ...(can(ctx.role, "payroll.manage") ? [{ href: "/payroll", label: "Payroll", icon: "bills", tone: "emerald" as const }] : []),
-      ],
-    },
-  ].filter((g) => g.items.length > 0);
+  const { home, sections } = buildNav({
+    role: ctx.role,
+    multiBranch: business.multiBranch,
+    hukka: hukkaOn,
+    counts: { notifications: unreadNotifications.length, guestWaiting: waiting, onlineWaiting, reservationsWaiting, hukkaLong, lowStock, lowRatings, ownerAlerts },
+  });
 
   // The few screens each role uses all day sit in the phone's bottom bar; everything else is under "More".
   const PREFERRED: Record<string, string[]> = {
@@ -135,7 +83,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     WAITER: ["/orders", "/quick", "/kitchen", "/notifications"],
     KITCHEN: ["/kitchen", "/notifications", "/stock"],
   };
-  const everyItem = groups.flatMap((g) => g.items);
+  const everyItem: NavItem[] = [...home, ...sections.flatMap((g) => g.items)].map((e) => ({ href: e.href, label: e.label, icon: e.icon, tone: "teal" as const, badge: e.badge, badgeTone: e.badgeTone }));
   const tabs = (PREFERRED[ctx.role] ?? PREFERRED.WAITER!).flatMap((href) => everyItem.filter((i) => i.href === href)).slice(0, 4);
 
   const brand = (
@@ -153,10 +101,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{business.name}</p>
-          <p className="truncate text-xs text-stone-500">{myBranches.length === 1 ? myBranches[0]!.name : `${myBranches.length} branches`}</p>
+          {business.multiBranch && <p className="truncate text-xs text-stone-500">{myBranches.length === 1 ? myBranches[0]!.name : `${myBranches.length} branches`}</p>}
         </div>
       </div>
-      {myBranches.length > 1 && <BranchSwitcher action={switchBranchAction} branches={myBranches} current={ctx.branchId} />}
+      {business.multiBranch && myBranches.length > 1 && <BranchSwitcher action={switchBranchAction} branches={myBranches} current={ctx.branchId} />}
     </div>
   );
 
@@ -189,7 +137,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   );
 
   return (
-    <AppShell brand={brand} top={top} nav={<NavLinks groups={groups} />} bottom={bottom} tabs={tabs} alerts={unreadNotifications.length}>
+    <AppShell brand={brand} top={top} nav={<NavLinks home={home} sections={sections} />} bottom={bottom} tabs={tabs} alerts={unreadNotifications.length}>
       {children}
     </AppShell>
   );

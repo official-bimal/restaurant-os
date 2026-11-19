@@ -175,3 +175,19 @@ export async function setBranchWifi(ctx: TenantContext, id: string, input: { nam
     await audit(tx, ctx, "branch.wifi", "Branch", id, { set: !!wifi });
   });
 }
+
+/**
+ * Turns the branch features on or off for the whole business: the branch switcher, branch reports and the Branches page. It can only be
+ * turned off while there is a single active branch, so nobody ends up with branches they can no longer reach.
+ */
+export async function setMultiBranch(ctx: TenantContext, on: boolean) {
+  needManage(ctx);
+  await db.$transaction(async (tx) => {
+    if (!on) {
+      const active = await tx.branch.count({ where: { businessId: ctx.businessId, active: true } });
+      if (active > 1) throw new DomainError("You have more than one active branch. Switch the others off on the Branches page first.");
+    }
+    await tx.business.update({ where: { id: ctx.businessId }, data: { multiBranch: on } });
+    await audit(tx, ctx, on ? "settings.multiBranchOn" : "settings.multiBranchOff", "Business", ctx.businessId);
+  });
+}

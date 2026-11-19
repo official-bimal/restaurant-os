@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { db } from "@/server/db";
 import { requireTenant } from "@/server/auth";
 import { can } from "@/server/permissions";
 import { DomainError } from "@/server/errors";
@@ -38,14 +39,17 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   const { date, today, report, dayClose, closedByName, openOrders } = data;
   const isFuture = date > today;
   const canClose = can(ctx.role, "day.close") && !dayClose && !isFuture;
+  const multiBranch = (await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { multiBranch: true } })).multiBranch;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">{label(date)}</h1>
-        <Link href="/reports/branches" className="min-h-9 rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
-          All branches
-        </Link>
+        {multiBranch && (
+          <Link href="/reports/branches" className="min-h-9 rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
+            All branches
+          </Link>
+        )}
         <Link href={`/reports?date=${addDays(date, -1)}`} className="min-h-9 rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
           ← Previous
         </Link>

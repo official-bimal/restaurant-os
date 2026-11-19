@@ -27,6 +27,7 @@ function costLabel(unit: string, costMilli: number): string {
 
 export default async function StockPage({ searchParams }: PageProps<"/stock">) {
   const ctx = await requireTenant("stock.view");
+  const multiBranch = (await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { multiBranch: true } })).multiBranch;
   const { error } = await searchParams;
   const [items, notHere, branch] = await Promise.all([
     listStock(ctx),
@@ -54,9 +55,11 @@ export default async function StockPage({ searchParams }: PageProps<"/stock">) {
           <h1 className="text-xl font-semibold">Stock</h1>
           <p className="text-sm text-stone-500">{branch.name}: quantities, reorder levels and costs are for this branch only.</p>
         </div>
-        <Link href="/stock/branches" className={`${small} flex items-center`}>
-          All branches and transfers
-        </Link>
+        {multiBranch && (
+          <Link href="/stock/branches" className={`${small} flex items-center`}>
+            All branches and transfers
+          </Link>
+        )}
         {can(ctx.role, "supplier.pay") && (
           <Link href="/stock/bills" className={`${small} flex items-center`}>
             Supplier bills

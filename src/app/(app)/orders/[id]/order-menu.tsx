@@ -59,6 +59,20 @@ function Thumb({ item }: { item: PickerItem }) {
   );
 }
 
+/** The dish photo (or a coloured letter tile) filling a grid card. */
+function CardPhoto({ item }: { item: PickerItem }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className="relative grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-xl text-4xl font-bold text-white/80" style={{ background: tileColor(item.name) }} aria-hidden="true">
+      {item.name.trim().charAt(0).toUpperCase()}
+      {item.photo && !broken ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/dish/${item.id}?v=${item.photo}`} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} className="absolute inset-0 size-full object-cover" />
+      ) : null}
+    </span>
+  );
+}
+
 /**
  * Taking an order on a phone: pick dishes from a list with big + and − buttons, and send them all in one tap. Nothing reloads while
  * picking (the old way sent the page back to the top after every dish). Dishes with choices (size, extras) ask first.
@@ -73,6 +87,7 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
   const [picks, setPicks] = useState<Record<string, string[]>>({});
   const [pickError, setPickError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [view, setView] = useState<"grid" | "list">("grid");
   const [noting, setNoting] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [pending, start] = useTransition();
@@ -203,6 +218,38 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
     );
   };
 
+  /** A product card, like a till screen: photo, name, price and one button. */
+  const card = (item: PickerItem) => {
+    const hasChoices = item.groups.length > 0;
+    const qty = hasChoices ? lines.filter((l) => l.item.id === item.id).reduce((n, l) => n + l.line.quantity, 0) : plainQty(item.id);
+    return (
+      <li key={item.id} className="flex flex-col gap-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-sm">
+        <CardPhoto item={item} />
+        <div className="min-w-0 px-1">
+          <p className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-tight">{item.name}</p>
+          <p className="text-sm text-stone-500">
+            {hasChoices ? "from " : ""}
+            {formatNpr(item.price)}
+          </p>
+        </div>
+        {hasChoices || qty === 0 ? (
+          <button
+            type="button"
+            onClick={() => (hasChoices ? openPicker(item) : change(item.id, [], 1))}
+            aria-label={hasChoices ? `Choose options for ${item.name}` : `Add ${item.name}`}
+            className="relative min-h-11 rounded-xl bg-brand-600 font-semibold text-white active:bg-brand-700"
+          >
+            {hasChoices ? "Choose" : "Add"}
+            {hasChoices && qty > 0 && <span className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-stone-900 text-xs">{qty}</span>}
+          </button>
+        ) : (
+          <div className="flex justify-center">{stepper(item.name, qty, (d) => change(item.id, [], d))}</div>
+        )}
+      </li>
+    );
+  };
+  const gridClass = "grid grid-cols-2 gap-3 py-2 sm:grid-cols-3 xl:grid-cols-4";
+
   const q = query.trim().toLowerCase();
   const matches = q ? all.filter((i) => i.name.toLowerCase().includes(q)) : [];
   const shown = tab === "all" ? real : real.filter((c) => c.id === tab);
@@ -211,17 +258,26 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
   return (
     <div>
       <div className="sticky top-0 z-10 -mx-4 space-y-2 bg-white/95 px-4 pb-2 pt-1 backdrop-blur">
-        <label className="relative block">
-          <span className="sr-only">Search dishes</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search dishes"
-            maxLength={60}
-            className="block min-h-11 w-full rounded-full border border-stone-300 px-4 py-2 text-base"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="relative block min-w-0 flex-1">
+            <span className="sr-only">Search dishes</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search dishes"
+              maxLength={60}
+              className="block min-h-11 w-full rounded-full border border-stone-300 px-4 py-2 text-base"
+            />
+          </label>
+          <div role="group" aria-label="How to show dishes" className="flex shrink-0 overflow-hidden rounded-full border border-stone-300 text-sm font-medium">
+            {(["grid", "list"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v} className={`min-h-11 px-3.5 ${view === v ? "bg-stone-900 text-white" : "bg-white text-stone-700"}`}>
+                {v === "grid" ? "Photos" : "List"}
+              </button>
+            ))}
+          </div>
+        </div>
         {!q && (
           <div role="tablist" aria-label="Menu categories" className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
             {[{ id: "all", name: "All" }, ...real].map((c) => (
@@ -243,13 +299,13 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
         matches.length === 0 ? (
           <p className="py-8 text-center text-stone-500">No dish matches &ldquo;{query.trim()}&rdquo;.</p>
         ) : (
-          <ul className="divide-y divide-stone-100">{matches.map(row)}</ul>
+          <ul className={view === "grid" ? gridClass : "divide-y divide-stone-100"}>{matches.map(view === "grid" ? card : row)}</ul>
         )
       ) : (
         shown.map((cat) => (
           <section key={cat.id} className="mb-2">
             {tab === "all" && <h3 className="mt-3 text-sm font-semibold uppercase tracking-wide text-stone-500">{cat.name}</h3>}
-            <ul className="divide-y divide-stone-100">{cat.items.map(row)}</ul>
+            <ul className={view === "grid" ? gridClass : "divide-y divide-stone-100"}>{cat.items.map(view === "grid" ? card : row)}</ul>
           </section>
         ))
       )}
