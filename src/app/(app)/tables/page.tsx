@@ -30,7 +30,12 @@ export default async function TablesPage({ searchParams }: PageProps<"/tables">)
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Tables and areas</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">Tables and areas</h1>
+        <Link href="/tables/layout" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm">
+          Arrange the floor
+        </Link>
+      </div>
 
       {typeof error === "string" && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">

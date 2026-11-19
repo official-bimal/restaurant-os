@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatNpr } from "@/features/billing/calc";
 import { tableShape } from "@/lib/table-shape";
+import { TableDrawing } from "@/components/table-drawing";
+import { hasPlan, planWidthPercent, resolvePlan } from "@/lib/floor-plan";
 import { createOrderAction } from "./actions";
 
 export interface MapTable {
@@ -18,42 +20,15 @@ export interface MapTable {
   served: boolean;
   /** Something needs the waiter: a guest order to accept, or a call for the waiter or the bill. */
   alert: string | null;
+  /** Where it sits on the floor plan (thousandths of the plan's width and height), or null when not placed. */
+  posX: number | null;
+  posY: number | null;
 }
 
 export interface MapArea {
   id: string;
   name: string;
   tables: MapTable[];
-}
-
-/** One table, drawn with its chairs. Free tables are grey; a table with an open order is teal and shows what is on it. */
-function Drawing({ capacity, busy, label }: { capacity: number; busy: boolean; label: string }) {
-  const shape = tableShape(capacity);
-  const body = busy ? "#0f857a" : "#e7e5e4";
-  const chair = busy ? "#6cc4ba" : "#d0cdca";
-  return (
-    <svg viewBox={`0 0 ${shape.width} ${shape.height}`} className="mx-auto h-24 w-full" aria-hidden="true">
-      {shape.seats.map((s, i) => (
-        <rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} rx={4} fill={chair} transform={`rotate(${s.rotate} ${s.x + s.w / 2} ${s.y + s.h / 2})`} />
-      ))}
-      {shape.body.kind === "circle" ? (
-        <circle cx={shape.body.cx} cy={shape.body.cy} r={shape.body.r} fill={body} />
-      ) : (
-        <rect x={shape.body.x} y={shape.body.y} width={shape.body.w} height={shape.body.h} rx={10} fill={body} />
-      )}
-      <text
-        x={shape.body.kind === "circle" ? shape.body.cx : shape.body.x + shape.body.w / 2}
-        y={shape.body.kind === "circle" ? shape.body.cy : shape.body.y + shape.body.h / 2}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={label.length > 3 ? 14 : 18}
-        fontWeight={700}
-        fill={busy ? "#ffffff" : "#44403c"}
-      >
-        {label}
-      </text>
-    </svg>
-  );
 }
 
 /**
@@ -68,7 +43,7 @@ export function TableMap({ areas, keyBase, canCreate }: { areas: MapArea[]; keyB
 
   const busyCount = area.tables.filter((t) => t.orderId).length;
 
-  const tile = (t: MapTable) => {
+  const tile = (t: MapTable, compact = false) => {
     const busy = !!t.orderId;
     const ring = t.alert ? "ring-2 ring-amber-400" : "ring-1 ring-stone-200";
     const inner = (
@@ -83,7 +58,7 @@ export function TableMap({ areas, keyBase, canCreate }: { areas: MapArea[]; keyB
             ✓
           </span>
         )}
-        <Drawing capacity={t.capacity} busy={busy} label={t.label} />
+        <TableDrawing capacity={t.capacity} busy={busy} label={t.label} className={compact ? "mx-auto h-12 w-full" : "mx-auto h-24 w-full"} />
         <span className="mt-1 block text-center text-xs leading-tight">
           {busy ? (
             <>
@@ -96,12 +71,12 @@ export function TableMap({ areas, keyBase, canCreate }: { areas: MapArea[]; keyB
               {t.alert && <span className="block font-medium text-amber-800">{t.alert}</span>}
             </>
           ) : (
-            <span className="block text-stone-500">{t.capacity} seats</span>
+            <span className="block text-stone-500">{compact ? "free" : `${t.capacity} seats`}</span>
           )}
         </span>
       </>
     );
-    const cls = `relative block w-full rounded-2xl bg-white p-2 pt-3 text-left shadow-sm ${ring} active:bg-stone-50`;
+    const cls = `relative block w-full ${compact ? "rounded-xl p-1 pt-2" : "rounded-2xl p-2 pt-3"} bg-white text-left shadow-sm ${ring} active:bg-stone-50`;
     if (busy) {
       return (
         <Link href={`/orders/${t.orderId}`} className={cls} aria-label={`${t.label}, open order, ${formatNpr(t.total)}. Open it.`}>
@@ -155,6 +130,20 @@ export function TableMap({ areas, keyBase, canCreate }: { areas: MapArea[]; keyB
       </p>
       {area.tables.length === 0 ? (
         <p className="text-sm text-stone-500">No tables in {area.name}.</p>
+      ) : hasPlan(area.tables) ? (
+        <div className="relative aspect-[4/3] min-h-[320px] w-full overflow-hidden rounded-2xl bg-stone-100 ring-1 ring-stone-200" aria-label={`Floor plan of ${area.name}`}>
+          {(() => {
+            const where = resolvePlan(area.tables);
+            return area.tables.map((t) => {
+              const at = where.get(t.id)!;
+              return (
+                <div key={t.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${at.x / 10}%`, top: `${at.y / 10}%`, width: `${planWidthPercent(t.capacity)}%`, minWidth: "4.5rem" }}>
+                  {tile(t, true)}
+                </div>
+              );
+            });
+          })()}
+        </div>
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {area.tables.map((t) => (

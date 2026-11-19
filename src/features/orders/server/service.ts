@@ -258,6 +258,7 @@ export async function addItems(ctx: TenantContext, orderId: string, lines: NewLi
   if (lines.length === 0) throw new DomainError("Pick at least one dish.");
   if (lines.length > 40) throw new DomainError("That is a lot of dishes at once. Send them in two lists.");
   if (lines.some((l) => badQuantity(l.quantity))) throw new DomainError("Quantity must be between 1 and 99.");
+  if (lines.some((l) => (l.note ?? "").trim().length > 120)) throw new DomainError("A note can be 120 characters at most.");
   const created = await db.$transaction(async (tx) => {
     const out = [];
     for (const line of lines) out.push(await addLineInTx(tx, ctx, orderId, line));

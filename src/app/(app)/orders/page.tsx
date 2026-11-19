@@ -40,6 +40,8 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
       total: live.reduce((n, i) => n + i.unitPrice * i.quantity, 0),
       served: open.length > 0 && open.every((o) => o.status === "SERVED"),
       alert: alerts[t.id] ?? null,
+      posX: t.posX,
+      posY: t.posY,
     });
   }
 

@@ -80,6 +80,7 @@ const linesSchema = z
       menuItemId: z.string().min(1).max(60),
       quantity: z.number().int().min(1).max(99),
       addOnIds: z.array(z.string().min(1).max(60)).max(30).optional(),
+      note: z.string().trim().max(120).optional(),
     }),
   )
   .min(1)

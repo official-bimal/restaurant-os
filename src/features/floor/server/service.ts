@@ -6,6 +6,7 @@ import { audit } from "@/server/audit";
 import { scope } from "@/server/branch";
 import { Prisma } from "@/generated/prisma/client";
 import { randomBytes } from "node:crypto";
+import { clampPos } from "@/lib/floor-plan";
 import { closeTableSittingsInTx } from "@/features/guest/server/service";
 
 /** Areas and tables. Every query is filtered by ctx.businessId. */
@@ -219,5 +220,36 @@ export async function resetTableQr(ctx: TenantContext, id: string) {
     });
     await closeTableSittingsInTx(tx, ctx.businessId, id, { reason: "QR_RESET" });
     await audit(tx, ctx, "floor.qrReset", "DiningTable", id, { label: table.label });
+  });
+}
+
+// --- floor plan ------------------------------------------------------------------
+
+/**
+ * Saves where the tables of one area sit on its floor plan. Positions are thousandths of the plan's width and height. `null` clears the plan,
+ * so the area goes back to the tidy rows. Tables not listed keep their place.
+ */
+export async function saveFloorPlan(ctx: TenantContext, areaId: string, positions: { tableId: string; x: number; y: number }[] | null) {
+  need(ctx);
+  if (positions && positions.length > 200) throw new DomainError("That is too many tables for one plan.");
+  await db.$transaction(async (tx) => {
+    const area = await tx.area.findFirst({ where: { id: areaId, ...scope(ctx) } });
+    if (!area) throw new DomainError("Area not found.");
+    if (positions === null) {
+      await tx.diningTable.updateMany({ where: { businessId: ctx.businessId, areaId }, data: { posX: null, posY: null } });
+      await audit(tx, ctx, "floor.planReset", "Area", areaId, { name: area.name });
+      return;
+    }
+    const ids = positions.map((p) => p.tableId);
+    const mine = await tx.diningTable.findMany({ where: { businessId: ctx.businessId, areaId, id: { in: ids } }, select: { id: true } });
+    if (mine.length !== new Set(ids).size) throw new DomainError("One of those tables is not in this area.");
+    for (const p of positions) {
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) throw new DomainError("Positions must be numbers.");
+      await tx.diningTable.update({
+        where: { businessId_id: { businessId: ctx.businessId, id: p.tableId } },
+        data: { posX: clampPos(p.x), posY: clampPos(p.y) },
+      });
+    }
+    await audit(tx, ctx, "floor.planSave", "Area", areaId, { name: area.name, tables: positions.length });
   });
 }

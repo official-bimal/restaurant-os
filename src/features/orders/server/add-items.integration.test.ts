@@ -129,6 +129,18 @@ describe("adding several dishes at once", () => {
     expect(await itemsOf(o.id)).toHaveLength(0);
   });
 
+  it("keeps a note for each line, so two of one dish can differ", async () => {
+    const o = await newOrder();
+    await addItems(w.waiter, o.id, [
+      { menuItemId: w.tea, quantity: 1, note: "  no sugar  " },
+      { menuItemId: w.tea, quantity: 1 },
+    ]);
+    const rows = await itemsOf(o.id);
+    expect(rows.map((r) => r.note)).toEqual(["no sugar", null]);
+    await expect(addItems(w.waiter, o.id, [{ menuItemId: w.tea, quantity: 1, note: "x".repeat(121) }])).rejects.toThrow(/120 characters/);
+    expect(await itemsOf(o.id)).toHaveLength(2);
+  });
+
   it("the single-dish way still works the same", async () => {
     const o = await newOrder();
     await addItem(w.waiter, o.id, { menuItemId: w.momo, quantity: 3, note: "no onion" });

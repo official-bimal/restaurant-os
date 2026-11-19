@@ -287,6 +287,9 @@ model DiningTable {
   branchId    String
   label       String
   capacity    Int        @default(4)
+  /// Where the table sits on its area's floor plan, as thousandths of the plan's width and height (the table's centre). Null until placed.
+  posX        Int?
+  posY        Int?
   state       TableState @default(FREE)
   /**
    * Secret in the printed QR code. Reset it if the QR leaks.
@@ -867,17 +870,22 @@ model DishRating {
  * selling while the book is behind, and a negative number is the prompt to count.
  */
 model StockItem {
-  id         String   @id @default(cuid())
-  businessId String
-  name       String
+  id           String   @id @default(cuid())
+  businessId   String
+  name         String
   /// g, ml or piece
-  unit       String
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  unit         String
+  active       Boolean  @default(true)
+  /// Who it is usually bought from. Reorder suggestions group by this.
+  supplierId   String?
+  /// It is bought in packs of this many base units (a 1000 g bag): suggested amounts are rounded up to whole packs.
+  packQuantity Int      @default(1)
+  createdAt    DateTime @default(now())
 
   business  Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
   movements StockMovement[]
   recipes   RecipeLine[]
+  supplier  Supplier?           @relation(fields: [businessId, supplierId], references: [businessId, id])
   poLines   PurchaseOrderLine[]
   addOnUse  AddOnStock[]
   levels    BranchStock[]
@@ -1018,9 +1026,12 @@ model Supplier {
   notes      String?
   /// The supplier's PAN, for the purchase book.
   panNumber  String?
+  /// Days from ordering to delivery, for reorder suggestions.
+  leadDays   Int      @default(2)
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 
+  stockItems     StockItem[]
   business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   purchaseOrders PurchaseOrder[]
   bills          SupplierBill[]

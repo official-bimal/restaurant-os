@@ -71,6 +71,11 @@ export default async function StockPage({ searchParams }: PageProps<"/stock">) {
           Purchase orders
         </Link>
         {manage && (
+          <Link href="/stock/reorder" className={`${small} flex items-center`}>
+            What to order
+          </Link>
+        )}
+        {manage && (
           <Link href="/stock/recipes" className={`${small} flex items-center`}>
             Recipes and food cost
           </Link>

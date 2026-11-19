@@ -30,8 +30,14 @@ interface Line {
   itemId: string;
   addOnIds: string[];
   quantity: number;
+  /** A note for the kitchen, like "no sugar". Two units with different notes are different lines. */
+  note: string;
 }
-const lineKey = (itemId: string, addOnIds: string[]) => `${itemId}|${[...addOnIds].sort().join(",")}`;
+const cleanNote = (t: string) => t.trim().replace(/\s+/g, " ").slice(0, 120);
+const lineKey = (itemId: string, addOnIds: string[], note = "") => `${itemId}|${[...addOnIds].sort().join(",")}|${cleanNote(note).toLowerCase()}`;
+
+/** The notes waiters give most, one tap each. */
+const QUICK_NOTES = ["No sugar", "Less sugar", "Extra hot", "No ice", "Less ice", "Extra shot", "No onion", "Spicy", "Less spicy", "Takeaway"];
 
 /** A calm coloured tile with the dish's first letter, for a dish with no photo. The colour comes from the name, so it never changes. */
 function tileColor(name: string): string {
@@ -67,6 +73,8 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
   const [picks, setPicks] = useState<Record<string, string[]>>({});
   const [pickError, setPickError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [noting, setNoting] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
   const [pending, start] = useTransition();
 
   const real = categories.filter((c) => c.items.length > 0);
@@ -79,10 +87,28 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
   const count = lines.reduce((n, l) => n + l.line.quantity, 0);
   const total = lines.reduce((n, l) => n + priceOf(l.item, l.line.addOnIds) * l.line.quantity, 0);
 
-  const change = (itemId: string, addOnIds: string[], delta: number) => {
+  const change = (itemId: string, addOnIds: string[], delta: number, note = "") => {
     setMessage(null);
-    const k = lineKey(itemId, addOnIds);
-    setCart((c) => ({ ...c, [k]: { itemId, addOnIds, quantity: Math.max(0, Math.min(99, (c[k]?.quantity ?? 0) + delta)) } }));
+    const k = lineKey(itemId, addOnIds, note);
+    setCart((c) => ({ ...c, [k]: { itemId, addOnIds, note: cleanNote(note), quantity: Math.max(0, Math.min(99, (c[k]?.quantity ?? 0) + delta)) } }));
+  };
+
+  /** Gives a note to ONE unit of a line (the whole line when it is just one), so two lattes with one of them no sugar is easy. */
+  const noteOne = (k: string, text: string, all = false) => {
+    const note = cleanNote(text);
+    setCart((c) => {
+      const from = c[k];
+      if (!from || from.quantity < 1) return c;
+      const moved = all ? from.quantity : 1;
+      const nk = lineKey(from.itemId, from.addOnIds, note);
+      if (nk === k) return c;
+      const next = { ...c, [k]: { ...from, quantity: from.quantity - moved } };
+      const there = next[nk];
+      next[nk] = { itemId: from.itemId, addOnIds: from.addOnIds, note, quantity: Math.min(99, (there?.quantity ?? 0) + moved) };
+      return next;
+    });
+    setNoting(null);
+    setNoteText("");
   };
   const plainQty = (id: string) => cart[lineKey(id, [])]?.quantity ?? 0;
 
@@ -110,7 +136,7 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
     if (pending || lines.length === 0) return;
     setMessage(null);
     start(async () => {
-      const r = await addItemsAction(orderId, lines.map((l) => ({ menuItemId: l.item.id, quantity: l.line.quantity, addOnIds: l.line.addOnIds })));
+      const r = await addItemsAction(orderId, lines.map((l) => ({ menuItemId: l.item.id, quantity: l.line.quantity, addOnIds: l.line.addOnIds, ...(l.line.note ? { note: l.line.note } : {}) })));
       if (r.ok) {
         setCart({});
         setOpen(false);
@@ -136,7 +162,8 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
 
   const row = (item: PickerItem) => {
     const hasChoices = item.groups.length > 0;
-    const mine = lines.filter((l) => l.item.id === item.id);
+    // Lines shown under the dish: all of them when it has choices, and any line with a note when it has none.
+    const mine = lines.filter((l) => l.item.id === item.id && (hasChoices || l.line.note));
     return (
       <li key={item.id} className="py-3">
         <div className="flex items-center gap-3">
@@ -160,18 +187,18 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
             stepper(item.name, plainQty(item.id), (d) => change(item.id, [], d))
           )}
         </div>
-        {hasChoices &&
-          mine.map((l) => {
-            const names = item.groups.flatMap((g) => g.choices).filter((c) => l.line.addOnIds.includes(c.id)).map((c) => c.name);
-            return (
-              <div key={l.k} className="ml-[4.75rem] mt-2 flex items-center justify-between gap-2 rounded-xl bg-stone-50 p-2">
-                <span className="min-w-0 text-sm text-stone-600">
-                  {names.length ? names.join(", ") : "Plain"} · {formatNpr(priceOf(item, l.line.addOnIds))}
-                </span>
-                {stepper(`${item.name} (${names.join(", ") || "plain"})`, l.line.quantity, (d) => change(item.id, l.line.addOnIds, d))}
-              </div>
-            );
-          })}
+        {mine.map((l) => {
+          const names = item.groups.flatMap((g) => g.choices).filter((c) => l.line.addOnIds.includes(c.id)).map((c) => c.name);
+          return (
+            <div key={l.k} className="ml-[4.75rem] mt-2 flex items-center justify-between gap-2 rounded-xl bg-stone-50 p-2">
+              <span className="min-w-0 text-sm text-stone-600">
+                {names.length ? names.join(", ") : "Plain"} · {formatNpr(priceOf(item, l.line.addOnIds))}
+                {l.line.note && <span className="block font-medium text-amber-800">&ldquo;{l.line.note}&rdquo;</span>}
+              </span>
+              {stepper(`${item.name} (${names.join(", ") || "plain"}${l.line.note ? `, ${l.line.note}` : ""})`, l.line.quantity, (d) => change(item.id, l.line.addOnIds, d, l.line.note))}
+            </div>
+          );
+        })}
       </li>
     );
   };
@@ -289,13 +316,59 @@ export function OrderMenu({ orderId, categories }: { orderId: string; categories
                         <span className="min-w-0 flex-1">
                           {l.item.name}
                           {names.length > 0 && <span className="block text-xs text-white/60">{names.join(", ")}</span>}
+                          {l.line.note && <span className="block text-xs font-medium text-amber-300">&ldquo;{l.line.note}&rdquo;</span>}
+                          {noting === l.k ? (
+                            <span className="mt-1 block space-y-1.5 rounded-lg bg-white/10 p-2 text-stone-900">
+                              <span className="flex flex-wrap gap-1.5">
+                                {QUICK_NOTES.map((n) => (
+                                  <button key={n} type="button" onClick={() => noteOne(l.k, n)} className="min-h-9 rounded-full bg-white px-3 text-xs font-medium">
+                                    {n}
+                                  </button>
+                                ))}
+                              </span>
+                              <span className="flex gap-1.5">
+                                <input
+                                  value={noteText}
+                                  onChange={(e) => setNoteText(e.target.value)}
+                                  maxLength={120}
+                                  placeholder={l.line.quantity > 1 ? "Note for one of them" : "Note, like no sugar"}
+                                  aria-label={`Note for ${l.item.name}`}
+                                  className="min-h-10 min-w-0 flex-1 rounded-lg px-2 text-base"
+                                />
+                                <button type="button" onClick={() => noteOne(l.k, noteText)} disabled={!cleanNote(noteText)} className="min-h-10 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-50">
+                                  Save
+                                </button>
+                                <button type="button" onClick={() => setNoting(null)} aria-label="Close note" className="min-h-10 rounded-lg bg-white px-3 text-sm">
+                                  ×
+                                </button>
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="mt-0.5 flex gap-3 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNoting(l.k);
+                                  setNoteText("");
+                                }}
+                                className="underline decoration-white/40 underline-offset-2"
+                              >
+                                {l.line.quantity > 1 ? "Note for one" : l.line.note ? "Change note" : "Add note"}
+                              </button>
+                              {l.line.note && (
+                                <button type="button" onClick={() => noteOne(l.k, "", true)} className="underline decoration-white/40 underline-offset-2">
+                                  Remove note
+                                </button>
+                              )}
+                            </span>
+                          )}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <button type="button" onClick={() => change(l.item.id, l.line.addOnIds, -1)} aria-label={`Remove one ${l.item.name}`} className="size-9 rounded-full bg-white/15 text-lg">
+                          <button type="button" onClick={() => change(l.item.id, l.line.addOnIds, -1, l.line.note)} aria-label={`Remove one ${l.item.name}`} className="size-9 rounded-full bg-white/15 text-lg">
                             −
                           </button>
                           <span className="w-6 text-center font-semibold">{l.line.quantity}</span>
-                          <button type="button" onClick={() => change(l.item.id, l.line.addOnIds, 1)} aria-label={`Add one more ${l.item.name}`} className="size-9 rounded-full bg-white/15 text-lg">
+                          <button type="button" onClick={() => change(l.item.id, l.line.addOnIds, 1, l.line.note)} aria-label={`Add one more ${l.item.name}`} className="size-9 rounded-full bg-white/15 text-lg">
                             +
                           </button>
                         </span>
