@@ -4,7 +4,7 @@ import { can } from "@/server/permissions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Icon } from "@/components/icons";
 import { cleanTemplate, resolveLayout, type DashboardConfig } from "@/features/dashboard/layout";
-import { availableWidgets, TEMPLATE_INFO, TEMPLATE_ORDER } from "@/features/dashboard/registry";
+import { availableWidgets, defaultHidden, TEMPLATE_INFO, TEMPLATE_ORDER } from "@/features/dashboard/registry";
 import { getPreferences } from "@/features/dashboard/server/preferences";
 import { loadDashboard } from "@/features/dashboard/server/data";
 import { DashboardGrid } from "@/features/dashboard/dashboard-grid";
@@ -23,8 +23,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const available = availableWidgets(ctx);
   const order = TEMPLATE_ORDER[template];
   const cfg: DashboardConfig | null = prefs.layout;
-  const desktop = resolveLayout(cfg?.desktop ?? null, available, order);
-  const mobile = resolveLayout(cfg?.mobile ?? null, available, order);
+  const off = defaultHidden(template, ctx);
+  const desktop = resolveLayout(cfg?.desktop ?? null, available, order, off);
+  const mobile = resolveLayout(cfg?.mobile ?? null, available, order, off);
   const needed = new Set([...desktop.visible, ...mobile.visible].map((p) => p.id));
 
   const d = await loadDashboard(ctx, needed);

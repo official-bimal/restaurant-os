@@ -372,7 +372,7 @@ body {
   align-items: stretch;
 }
 @media (min-width: 1024px) {
-  .dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dash-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 }
 .dash-item {
   order: var(--om, 0);
@@ -397,7 +397,9 @@ body {
 .dash-h { font-size: var(--dash-h); }
 
 /* Classic Business: compact and information-rich. */
-.dash-t-classic { --dash-gap: 0.75rem; --dash-pad: 1rem; --dash-kpi: 1.5rem; --dash-radius: 0.75rem; }
+.dash-t-classic { --dash-gap: 1rem; --dash-pad: 1.25rem; --dash-kpi: 1.875rem; --dash-radius: 1rem; }
+@media (min-width: 1024px) { .dash-t-classic { --dash-gap: 1.5rem; } }
+@media (max-width: 639.98px) { .dash-t-classic { --dash-gap: 0.75rem; --dash-pad: 1rem; --dash-kpi: 1.5rem; } }
 /* Modern Analytics: spacious, big figures, soft depth. */
 .dash-t-modern {
   --dash-gap: 1.25rem; --dash-pad: 1.5rem; --dash-kpi: 1.875rem; --dash-h: 1.125rem; --dash-radius: 1.5rem;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { availableWidgets, TEMPLATE_ORDER, WIDGETS } from "./registry";
-import { cleanTemplate, defaultLayout, moveItem, parseConfig, resolveLayout, rowsOf, toDeviceLayout, verticalTarget, type Placed } from "./layout";
+import { cleanTemplate, defaultLayout, moveItem, parseConfig, resolveLayout, rowsOf, toDeviceLayout, verticalTarget, type Placed, type Size } from "./layout";
 
 const all = WIDGETS;
 const order = TEMPLATE_ORDER.CLASSIC;
@@ -58,7 +58,7 @@ describe("resolving a layout", () => {
   });
   it("puts a size the widget does not offer back to its default", () => {
     const r = resolveLayout({ order: [{ id: "paymentBreakdown", size: "S" }], hidden: [] }, availableWidgets("OWNER"), order);
-    expect(r.visible.find((p) => p.id === "paymentBreakdown")!.size).toBe("M");
+    expect(r.visible.find((p) => p.id === "paymentBreakdown")!.size).toBe("T");
   });
   it("does not lose a hidden widget the order forgot", () => {
     const r = resolveLayout({ order: [], hidden: ["floor"] }, availableWidgets("OWNER"), order);
@@ -95,7 +95,7 @@ describe("checking a layout from outside", () => {
 });
 
 describe("moving cards", () => {
-  const L = (...x: [string, "S" | "M" | "L"][]): Placed[] => x.map(([id, size]) => ({ id, size }));
+  const L = (...x: [string, Size][]): Placed[] => x.map(([id, size]) => ({ id, size }));
   it("moves one item without changing the others", () => {
     expect(moveItem(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
     expect(moveItem(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);

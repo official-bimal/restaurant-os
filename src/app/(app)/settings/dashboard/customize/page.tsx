@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireTenant } from "@/server/auth";
 import { getEditorState } from "@/features/dashboard/server/preferences";
 import { TEMPLATE_INFO } from "@/features/dashboard/registry";
+import type { Size } from "@/features/dashboard/layout";
 import { saveLayoutAction } from "../actions";
 import { LayoutEditor, type WidgetMeta } from "./layout-editor";
 
@@ -11,7 +12,7 @@ export default async function CustomizePage() {
   const ctx = await requireTenant();
   const st = await getEditorState(ctx);
   const widgets: WidgetMeta[] = st.widgets.map((w) => ({ id: w.id, title: w.title, description: w.description, group: w.group, sizes: [...w.sizes] }));
-  const plain = (r: { visible: { id: string; size: "S" | "M" | "L" }[]; hidden: { id: string; size: "S" | "M" | "L" }[] }) => ({ visible: r.visible, hidden: r.hidden });
+  const plain = (r: { visible: { id: string; size: Size }[]; hidden: { id: string; size: Size }[] }) => ({ visible: r.visible, hidden: r.hidden });
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">

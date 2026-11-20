@@ -6,7 +6,7 @@ import { DomainError } from "@/server/errors";
 import { audit } from "@/server/audit";
 import { cleanAccent, cleanMode, effectiveAccent, type ThemeMode } from "@/features/appearance/theme";
 import { cleanTemplate, parseConfig, resolveLayout, toDeviceLayout, type DashboardConfig, type Device, type Placed, type Template } from "../layout";
-import { availableWidgets, TEMPLATE_ORDER, WIDGETS } from "../registry";
+import { availableWidgets, defaultHidden, TEMPLATE_ORDER, WIDGETS } from "../registry";
 
 /**
  * A person's own look and dashboard (one row per person per business) and the business's default accent colour. Every query is keyed by
@@ -99,8 +99,9 @@ export async function getEditorState(ctx: TenantContext) {
   const p = await getPreferences(ctx);
   const available = availableWidgets(ctx);
   const order = TEMPLATE_ORDER[p.template];
-  const now = (d: Device) => resolveLayout(p.layout?.[d] ?? null, available, order);
-  const std = () => resolveLayout(null, available, order);
+  const off = defaultHidden(p.template, ctx);
+  const now = (d: Device) => resolveLayout(p.layout?.[d] ?? null, available, order, off);
+  const std = () => resolveLayout(null, available, order, off);
   return {
     template: p.template,
     widgets: available,

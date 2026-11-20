@@ -27,11 +27,11 @@ interface DeviceState {
 }
 type State = Record<Device, DeviceState>;
 
-const SIZE_LABEL: Record<Size, string> = { S: "Small", M: "Medium", L: "Wide" };
-const COLS: Record<Device, string> = { desktop: "grid-cols-4", mobile: "grid-cols-2" };
+const SIZE_LABEL: Record<Size, string> = { S: "Small", T: "Third", M: "Half", W: "Two thirds", L: "Full width" };
+const COLS: Record<Device, string> = { desktop: "grid-cols-12", mobile: "grid-cols-2" };
 const SPAN_CLASS: Record<Device, Record<Size, string>> = {
-  desktop: { S: "col-span-1", M: "col-span-2", L: "col-span-4" },
-  mobile: { S: "col-span-1", M: "col-span-2", L: "col-span-2" },
+  desktop: { S: "col-span-3", T: "col-span-4", M: "col-span-6", W: "col-span-8", L: "col-span-12" },
+  mobile: { S: "col-span-1", T: "col-span-2", M: "col-span-2", W: "col-span-2", L: "col-span-2" },
 };
 
 function Tile({ item, meta, device, index, total, onMove, onVertical, onSize, onHide }: { item: Placed; meta: WidgetMeta; device: Device; index: number; total: number; onMove: (d: -1 | 1) => void; onVertical: (d: "up" | "down") => void; onSize: (s: Size) => void; onHide: () => void }) {
@@ -167,7 +167,7 @@ export function LayoutEditor({
             </button>
           ))}
         </div>
-        <p className="min-w-[12rem] flex-1 text-sm text-stone-500">{device === "desktop" ? "Four columns. Drag a card, or use the arrows." : "Two columns, the way it looks on a phone."}</p>
+        <p className="min-w-[12rem] flex-1 text-sm text-stone-500">{device === "desktop" ? "Twelve columns. Drag a card, or use the arrows." : "Two columns, the way it looks on a phone."}</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-secondary" onClick={() => setState(defaults)} disabled={pending || JSON.stringify(state) === JSON.stringify(defaults)}>
             Reset to default

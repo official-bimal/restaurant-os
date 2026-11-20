@@ -84,7 +84,7 @@ export const RENDERERS: Record<string, (p: WidgetProps) => ReactNode> = {
         hint={d.charts.week.changePercent === null ? "Nothing to compare with yet" : `${d.charts.week.changePercent >= 0 ? "+" : ""}${d.charts.week.changePercent}% on the 7 days before`}
       />
     ),
-  openOrders: ({ d, t, size }) => <Kpi t={t} size={size} icon="orders" label="Pending orders" value={String(d.orders.length)} hint={d.orders.length ? "Waiting to be paid" : "Nothing open right now"} />,
+  openOrders: ({ d, t, size }) => <Kpi t={t} size={size} icon="orders" label="Open orders" value={String(d.orders.length)} hint={d.orders.length ? "Waiting to be paid" : "Nothing open right now"} />,
   tablesInUse: ({ d, t, size }) => <Kpi t={t} size={size} icon="tables" label="Tables in use" value={`${d.occupied} / ${d.tables.length}`} hint={`${d.occupancy}% of the floor`} />,
   stockAlerts: ({ d, t, size }) => <Kpi t={t} size={size} icon="stock" label="Inventory alerts" value={String(d.lowStock)} hint={d.lowStock ? "Items at or below their level" : "Everything is stocked"} />,
 
@@ -134,7 +134,8 @@ export const RENDERERS: Record<string, (p: WidgetProps) => ReactNode> = {
     );
   },
 
-  attention: ({ d }) => (
+  attention: ({ d }) =>
+    d.attention.length === 0 ? null : (
     <Panel title="Needs attention">
       {d.attention.length === 0 ? (
         <Empty>Nothing is waiting. Alerts show up here.</Empty>
@@ -183,7 +184,7 @@ export const RENDERERS: Record<string, (p: WidgetProps) => ReactNode> = {
   topSelling: ({ d }) => {
     const top = d.day?.report.topItems ?? [];
     return (
-      <Panel title="Top selling dishes" note="Today">
+      <Panel title="Best sellers today">
         {top.length === 0 ? (
           <Empty>No sales yet today.</Empty>
         ) : (
@@ -265,7 +266,7 @@ export const RENDERERS: Record<string, (p: WidgetProps) => ReactNode> = {
       </Panel>
     ),
   floor: ({ d }) => (
-    <Panel title="Floor and staff">
+    <Panel title="Floor">
       <p className="text-sm text-stone-500">
         {d.occupied} of {d.tables.length} tables in use
       </p>

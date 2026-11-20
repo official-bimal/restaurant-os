@@ -6,7 +6,8 @@ import { DomainError } from "@/server/errors";
  * removed widgets disappear and new widgets appear without anyone editing their layout.
  */
 
-export const SIZES = ["S", "M", "L"] as const;
+/** S a quarter, T a third, M a half, W two thirds, L the full width. */
+export const SIZES = ["S", "T", "M", "W", "L"] as const;
 export type Size = (typeof SIZES)[number];
 export const TEMPLATES = ["CLASSIC", "MODERN", "COMPACT"] as const;
 export type Template = (typeof TEMPLATES)[number];
@@ -14,10 +15,10 @@ export const DEVICES = ["desktop", "mobile"] as const;
 export type Device = (typeof DEVICES)[number];
 
 /** Columns of the grid on each device, and how many each size takes. */
-export const COLUMNS: Record<Device, number> = { desktop: 4, mobile: 2 };
+export const COLUMNS: Record<Device, number> = { desktop: 12, mobile: 2 };
 export const SPAN: Record<Device, Record<Size, number>> = {
-  desktop: { S: 1, M: 2, L: 4 },
-  mobile: { S: 1, M: 2, L: 2 },
+  desktop: { S: 3, T: 4, M: 6, W: 8, L: 12 },
+  mobile: { S: 1, T: 2, M: 2, W: 2, L: 2 },
 };
 
 export interface Placed {
@@ -77,13 +78,14 @@ export function parseConfig(raw: unknown, known: readonly WidgetInfo[]): Dashboa
 }
 
 /** The standard layout: every available widget in the template's order, at its default size. Mobile follows desktop order. */
-export function defaultLayout(available: readonly WidgetInfo[], templateOrder: readonly string[]): DeviceLayout {
+export function defaultLayout(available: readonly WidgetInfo[], templateOrder: readonly string[], defaultHidden: readonly string[] = []): DeviceLayout {
   const rank = (id: string) => {
     const i = templateOrder.indexOf(id);
     return i === -1 ? templateOrder.length : i;
   };
   const sorted = available.map((w, i) => ({ w, i })).sort((a, b) => rank(a.w.id) - rank(b.w.id) || a.i - b.i).map((x) => x.w);
-  return { order: sorted.map((w) => ({ id: w.id, size: w.defaultSize })), hidden: [] };
+  const hide = new Set(defaultHidden);
+  return { order: sorted.map((w) => ({ id: w.id, size: w.defaultSize })), hidden: sorted.filter((w) => hide.has(w.id)).map((w) => w.id) };
 }
 
 export interface ResolvedLayout {
@@ -97,9 +99,10 @@ export interface ResolvedLayout {
  * What to show for one device: the saved order restricted to widgets that are available to this person now, then any available widget
  * the layout has never seen (a newly added one) after them in template order. With nothing saved it is the standard layout.
  */
-export function resolveLayout(saved: DeviceLayout | null, available: readonly WidgetInfo[], templateOrder: readonly string[]): ResolvedLayout {
-  const base = defaultLayout(available, templateOrder);
-  if (!saved) return { visible: base.order, hidden: [] };
+export function resolveLayout(saved: DeviceLayout | null, available: readonly WidgetInfo[], templateOrder: readonly string[], defaultHidden: readonly string[] = []): ResolvedLayout {
+  const base = defaultLayout(available, templateOrder, defaultHidden);
+  const off = new Set(base.hidden);
+  if (!saved) return { visible: base.order.filter((p) => !off.has(p.id)), hidden: base.order.filter((p) => off.has(p.id)) };
   const byId = new Map(available.map((w) => [w.id, w]));
   const hiddenSet = new Set(saved.hidden);
   const known = new Set<string>();
@@ -120,7 +123,7 @@ export function resolveLayout(saved: DeviceLayout | null, available: readonly Wi
     }
   }
   // New widgets since the layout was saved: shown, in the template's order, after what the person arranged.
-  for (const p of base.order) if (!known.has(p.id)) visible.push(p);
+  for (const p of base.order) if (!known.has(p.id)) (off.has(p.id) ? hidden : visible).push(p);
   return { visible, hidden };
 }
 

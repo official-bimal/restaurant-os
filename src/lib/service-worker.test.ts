@@ -95,8 +95,8 @@ beforeEach(async () => {
 describe("installing", () => {
   it("keeps the plain offline page and takes over at once", () => {
     expect(w.state.skipWaiting).toBe(true);
-    expect([...w.stores.keys()]).toEqual(["ros-offline-v2"]);
-    expect([...w.stores.get("ros-offline-v2")!.keys()]).toEqual(["/offline"]);
+    expect([...w.stores.keys()]).toEqual(["ros-offline-v3"]);
+    expect([...w.stores.get("ros-offline-v3")!.keys()]).toEqual(["/offline"]);
   });
 
   it("still installs if the offline page could not be fetched", async () => {
@@ -110,7 +110,7 @@ describe("installing", () => {
     w.stores.set("ros-offline-v1", new Map());
     w.stores.set("somebody-elses-cache", new Map());
     await w.run("activate");
-    expect([...w.stores.keys()].sort()).toEqual(["ros-offline-v2", "somebody-elses-cache"]);
+    expect([...w.stores.keys()].sort()).toEqual(["ros-offline-v3", "somebody-elses-cache"]);
   });
 });
 
@@ -122,7 +122,7 @@ describe("a page that cannot be reached", () => {
   });
 
   it("with no offline page saved, still answers with something readable", async () => {
-    w.stores.get("ros-offline-v2")!.clear();
+    w.stores.get("ros-offline-v3")!.clear();
     w.state.online = false;
     const res = await w.run("fetch", { request: w.request("/dashboard") });
     expect(res!.status).toBe(503);
@@ -140,7 +140,7 @@ describe("a page that cannot be reached", () => {
   it("keeps no page for later (only the offline page and the quick-order page are ever saved)", async () => {
     await w.run("fetch", { request: w.request("/bills") });
     await w.run("fetch", { request: w.request("/customers") });
-    expect([...w.stores.get("ros-offline-v2")!.keys()]).toEqual(["/offline"]);
+    expect([...w.stores.get("ros-offline-v3")!.keys()]).toEqual(["/offline"]);
   });
 });
 

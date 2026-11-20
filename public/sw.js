@@ -10,7 +10,7 @@
  * shows that instead of the browser's error screen. Pages themselves are never kept for this.
  * Every other request goes straight to the network untouched, so no other page, bill or customer data is kept here. */
 
-const CACHE = "ros-offline-v2";
+const CACHE = "ros-offline-v3";
 const OFFLINE_PAGE = "/offline";
 
 self.addEventListener("install", (event) => {
@@ -40,11 +40,17 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
-        const hit = await cache.match(req);
-        if (hit) return hit;
-        const res = await fetch(req);
-        if (res.ok) cache.put(req, res.clone());
-        return res;
+        // Network first, so a changed stylesheet or script is never hidden behind an old copy; the saved copy is only for when the
+        // connection is gone (the offline quick-order screen needs it).
+        try {
+          const res = await fetch(req);
+          if (res.ok) cache.put(req, res.clone());
+          return res;
+        } catch (e) {
+          const hit = await cache.match(req);
+          if (hit) return hit;
+          throw e;
+        }
       }),
     );
     return;
