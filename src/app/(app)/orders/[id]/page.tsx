@@ -11,6 +11,7 @@ import { getSetting as getDisplaySetting, listDisplays } from "@/features/displa
 import { CustomerOsPoints } from "@/features/customeros/points";
 import { listBillRewards, rewardUsedOnBill } from "@/features/customeros/server/reward";
 import { getPrintConfig } from "@/features/printing/server/settings";
+import { db } from "@/server/db";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
@@ -113,6 +114,14 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   const hasFood = order.items.some((i) => i.status !== "CANCELLED");
   const canCancel = !closed && can(ctx, hasFood ? "order.void" : "order.edit");
   const printCfg = await getPrintConfig(ctx.businessId);
+  // Other bills still open at this table (after a split): shown so each can be opened and paid.
+  const sisters = order.tableId
+    ? await db.order.findMany({
+        where: { businessId: ctx.businessId, branchId: ctx.branchId, tableId: order.tableId, status: { in: ["OPEN", "SERVED"] }, id: { not: order.id } },
+        orderBy: { number: "asc" },
+        include: { items: { where: { status: { not: "CANCELLED" } }, select: { quantity: true, unitPrice: true, complimentary: true } } },
+      })
+    : [];
   // The customer display: shown to the cashier only when the business uses it and this branch has a screen.
   const displaySetting = can(ctx, "bill.checkout") ? await getDisplaySetting(ctx.businessId) : null;
   const displays = displaySetting?.enabled ? await listDisplays(ctx) : [];
@@ -150,11 +159,41 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
           Order #{order.number} · {order.table ? order.table.label : order.type === "DELIVERY" ? "Delivery" : "Takeaway"}
         </h1>
         <span className="rounded-full bg-stone-200 px-2 py-0.5 text-xs">{order.status.toLowerCase()}</span>
-        {order.splitFromId && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">split bill</span>}
+        {order.label && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">{order.label}</span>}
+        {order.splitFromId && !order.label && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">split bill</span>}
         {order.status !== "CANCELLED" && order.status !== "MERGED" && order.items.some((i) => i.status !== "CANCELLED") && (
           <PrintMenu kind="kitchen" id={order.id} label="Print kitchen ticket" queue={queueButton("kitchen", order.id)} defaultWidthMm={printCfg.paperWidthMm} defaultHeightMm={printCfg.paperHeightMm} className="ml-auto" />
         )}
       </div>
+
+      {typeof query.split === "string" && (
+        <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-900">
+          Split into {Math.min(8, Math.max(2, Number(query.split) || 2))} bills at this table. This one is below; the others are listed under it. Pay each one on its own.
+        </p>
+      )}
+
+      {sisters.length > 0 && (
+        <section className="card p-4" aria-label="Other bills at this table">
+          <h2 className="mb-2 font-semibold">Other bills at this table</h2>
+          <ul className="divide-y divide-stone-100">
+            {sisters.map((s) => (
+              <li key={s.id}>
+                <Link href={`/orders/${s.id}`} className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-stone-50">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-stone-100 text-sm font-semibold text-stone-700">#{s.number}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{s.label ?? "Bill"}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatNpr(s.items.reduce((n, i) => n + (i.complimentary ? 0 : i.quantity * i.unitPrice), 0))}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {canRestructure && order.type !== "DELIVERY" && activeItems.length > 0 && (
+        <Link href={`/orders/${order.id}/split`} className="btn-secondary w-fit">
+          Split the bill by item between guests
+        </Link>
+      )}
 
       {canRestructure && options && order.tableId && (
         <details className="card p-3">

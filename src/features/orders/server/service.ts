@@ -515,7 +515,8 @@ export async function checkout(ctx: TenantContext, orderId: string, input: Check
       userId: ctx.userId,
       items: active.map((i) => ({
         menuItemId: i.menuItemId,
-        quantity: i.quantity,
+        // A share of a dish uses a share of its recipe.
+        quantity: i.quantity / (i.shareDen || 1),
         addOnIds: i.addOns.flatMap((a) => (a.addOnId ? [a.addOnId] : [])),
       })),
     });

@@ -47,6 +47,8 @@ export async function deductForInvoice(
       }
     }
   }
+  // A shared dish (one third of a pizza on each of three bills) uses a share of its recipe, so this can be fractional: round per item.
+  for (const [k, v] of used) used.set(k, Math.round(v));
   if (used.size === 0) return [];
   await ensureLevels(tx, businessId, branchId, [...used.keys()]);
   const levels = await tx.branchStock.findMany({

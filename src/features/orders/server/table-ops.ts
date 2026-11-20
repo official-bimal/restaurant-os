@@ -8,6 +8,7 @@ import { scope } from "@/server/branch";
 import { Prisma } from "@/generated/prisma/client";
 import { closeTableSittingsInTx } from "@/features/guest/server/service";
 import { syncOrderStatus } from "./sync";
+import { MAX_GUESTS, planSplit, shareName, type Assignment, type SplitItem } from "@/features/billing/split-items";
 
 /**
  * Move a party to another table, merge two bills into one, split one bill into two.
@@ -255,6 +256,123 @@ export async function splitOrder(
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const again = await db.order.findUnique({ where: { businessId_idempotencyKey: { businessId, idempotencyKey } } });
       if (again) return again;
+    }
+    throw e;
+  }
+}
+
+// --- split by item between guests --------------------------------------------
+
+export interface SplitByItemInput {
+  /** One entry per guest, in order. The first guest keeps this bill. */
+  guests: { label: string }[];
+  assignments: Assignment[];
+  idempotencyKey: string;
+}
+
+const cleanLabel = (v: string, n: number) => v.replace(/\s+/g, " ").trim().slice(0, 30) || `Guest ${n + 1}`;
+
+/**
+ * Split a table's bill between guests, item by item. Every unit of every dish goes to one guest or is shared equally by several. The first
+ * guest keeps this bill (its number, its customer and loyalty link); every other guest gets a new bill at the same table. Nothing is
+ * paid here: each bill is paid and invoiced on its own afterwards, with its own service charge, VAT and discount. A shared dish becomes
+ * equal-priced "1/3 share" lines that add up to its price, and only a dish already served can be shared (so the kitchen board never shows
+ * one dish as several). Safe to repeat with the same key. Returns the bills, this one first.
+ */
+export async function splitByItem(ctx: TenantContext, orderId: string, input: SplitByItemInput) {
+  need(ctx);
+  const { businessId, branchId } = scope(ctx);
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(input.idempotencyKey)) throw new DomainError("Something went wrong. Please try again.");
+  const guestCount = input.guests.length;
+  if (guestCount < 2 || guestCount > MAX_GUESTS) throw new DomainError(`Split between 2 and ${MAX_GUESTS} guests.`);
+  const labels = input.guests.map((g, i) => cleanLabel(g.label, i));
+  const keyFor = (i: number) => `${input.idempotencyKey}-g${i}`;
+
+  // A double tap or a retry returns the bills the first tap made.
+  const done = await db.order.findMany({ where: { businessId, branchId, idempotencyKey: { in: Array.from({ length: guestCount - 1 }, (_, i) => keyFor(i + 1)) } }, orderBy: { number: "asc" } });
+  if (done.length > 0) {
+    const first = await db.order.findFirst({ where: { id: orderId, businessId, branchId } });
+    return { orders: [...(first ? [first] : []), ...done] };
+  }
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const order = await loadOpenOrder(tx, businessId, branchId, orderId);
+      if (order.type === "DELIVERY") throw new DomainError("A delivery bill cannot be split between guests.");
+      const active = order.items.filter((i) => i.status !== "CANCELLED");
+      if (active.length === 0) throw new DomainError("There is nothing on this bill to split.");
+      const items: SplitItem[] = active.map((i) => ({ id: i.id, name: i.name, unitPrice: i.unitPrice, quantity: i.quantity }));
+      let lines;
+      try {
+        lines = planSplit(items, input.assignments, guestCount);
+      } catch (e) {
+        if (e instanceof RangeError) throw new DomainError(e.message);
+        throw e;
+      }
+      const byId = new Map(active.map((i) => [i.id, i]));
+      for (const l of lines) {
+        const item = byId.get(l.itemId)!;
+        if (l.shareDen > 1 && item.status !== "SERVED") throw new DomainError(`${item.name} is still being made. Share it once it has been served.`);
+      }
+
+      // The bills: this one is guest 1; every other guest gets a new bill at the same table.
+      const orderIds: string[] = [order.id];
+      const created: { id: string; number: number }[] = [];
+      for (let g = 1; g < guestCount; g++) {
+        const { orderCounter } = await tx.business.update({ where: { id: businessId }, data: { orderCounter: { increment: 1 } }, select: { orderCounter: true } });
+        const o = await tx.order.create({
+          data: { businessId, branchId, number: orderCounter, type: order.type, tableId: order.tableId, createdById: ctx.userId, idempotencyKey: keyFor(g), splitFromId: order.id, label: labels[g] },
+        });
+        orderIds.push(o.id);
+        created.push({ id: o.id, number: orderCounter });
+      }
+      await tx.order.update({ where: { id: order.id }, data: { label: labels[0] } });
+
+      for (const item of active) {
+        const mine = lines.filter((l) => l.itemId === item.id);
+        for (let k = 0; k < mine.length; k++) {
+          const l = mine[k]!;
+          const name = shareName(item.name, l.shareDen);
+          const scale = (price: number) => (l.shareDen > 1 ? Math.round(price / l.shareDen) : price);
+          if (k === 0) {
+            // The first piece is the original line, moved and re-priced if it is a share, so its kitchen history stays with it.
+            await tx.orderItem.update({ where: { id: item.id }, data: { orderId: orderIds[l.guest], quantity: l.quantity, unitPrice: l.unitPrice, name, shareDen: l.shareDen } });
+            if (l.shareDen > 1) for (const a of item.addOns) await tx.orderItemAddOn.update({ where: { id: a.id }, data: { price: scale(a.price) } });
+          } else {
+            await tx.orderItem.create({
+              data: {
+                businessId,
+                orderId: orderIds[l.guest]!,
+                menuItemId: item.menuItemId,
+                name,
+                unitPrice: l.unitPrice,
+                quantity: l.quantity,
+                note: item.note,
+                complimentary: item.complimentary,
+                status: item.status,
+                createdAt: item.createdAt,
+                statusAt: item.statusAt,
+                printedAt: item.printedAt,
+                shareDen: l.shareDen,
+                addOns: { create: item.addOns.map((a) => ({ businessId, addOnId: a.addOnId, name: a.name, price: scale(a.price) })) },
+              },
+            });
+          }
+        }
+      }
+      for (const id of orderIds) await syncOrderStatus(tx, businessId, id);
+      await audit(tx, ctx, "order.splitByItem", "Order", order.id, { guests: labels, newOrders: created.map((c) => c.number), lines: lines.length });
+      const all = await tx.order.findMany({ where: { id: { in: orderIds }, businessId }, orderBy: { number: "asc" } });
+      return { orders: all };
+    });
+  } catch (e) {
+    // Two identical taps raced: the loser returns the winner's bills.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const again = await db.order.findMany({ where: { businessId, branchId, idempotencyKey: { in: Array.from({ length: guestCount - 1 }, (_, i) => keyFor(i + 1)) } }, orderBy: { number: "asc" } });
+      if (again.length > 0) {
+        const first = await db.order.findFirst({ where: { id: orderId, businessId, branchId } });
+        return { orders: [...(first ? [first] : []), ...again] };
+      }
     }
     throw e;
   }

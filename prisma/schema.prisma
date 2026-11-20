@@ -420,6 +420,8 @@ model Order {
   status                 OrderStatus     @default(OPEN)
   tableId                String?
   note                   String?
+  /// Who this bill is for when a table was split by item ("Guest 2", "Sita"). Shown on screen; not printed on the kitchen slip.
+  label                  String?
   /**
    * Client-supplied key making "create order" safe to retry.
    */
@@ -502,6 +504,9 @@ model OrderItem {
   statusAt      DateTime   @default(now())
   /// When this item was printed on a kitchen slip (by a connected printer). Null = not printed yet.
   printedAt     DateTime?
+  /// 1 for a normal line. 3 means this line is one third of a dish shared by three people when a bill was split by item: the price is already
+  /// that share, and stock is taken off for a third of the recipe.
+  shareDen      Int        @default(1)
 
   order    Order            @relation(fields: [businessId, orderId], references: [businessId, id], onDelete: Cascade)
   menuItem MenuItem         @relation(fields: [businessId, menuItemId], references: [businessId, id])
