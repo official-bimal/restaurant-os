@@ -7,6 +7,8 @@ import { audit } from "@/server/audit";
 import { printerColumns, buildEscPos } from "@/lib/escpos";
 import { documentLines, type DocKind } from "./render";
 import { getPrintConfig, paperFor } from "./settings";
+import { layoutTest } from "../layout";
+import { printerForKind, splitKitchen, type RouteRow } from "../routing";
 
 /**
  * The print queue. Staff (or the "print kitchen slips automatically" setting) put jobs in; a small program next to the
@@ -27,15 +29,46 @@ function needPrint(ctx: TenantContext) {
 
 // --- putting jobs in -------------------------------------------------------------------
 
-/** Queue a kitchen slip for an order, unless one is already waiting (it will include everything not yet printed). */
+/** The station of each unprinted, live item of an order (a station id, or "" for none), as the kitchen slip will group them. */
+async function unprintedStationKeys(tx: Pick<typeof db, "orderItem" | "branchMenuItem">, businessId: string, branchId: string, orderId: string): Promise<string[]> {
+  const items = await tx.orderItem.findMany({
+    where: { businessId, orderId, printedAt: null, status: { not: "CANCELLED" } },
+    select: { menuItemId: true, menuItem: { select: { stationId: true } } },
+  });
+  const overrides = await tx.branchMenuItem.findMany({ where: { businessId, branchId, stationId: { not: null }, menuItemId: { in: [...new Set(items.map((i) => i.menuItemId))] } }, select: { menuItemId: true, stationId: true } });
+  const keyOf = new Map(overrides.map((o) => [o.menuItemId, o.stationId ?? ""]));
+  return [...new Set(items.map((i) => keyOf.get(i.menuItemId) ?? i.menuItem.stationId ?? ""))];
+}
+
+/**
+ * Queue a kitchen slip for an order, unless one is already waiting (it will include everything not yet printed). With kitchen routes set up,
+ * the order's stations are shared between printers and each printer gets its own slip; without them there is one slip for any printer.
+ * Returns the first job's id.
+ */
 export async function queueKitchenSlip(businessId: string, branchId: string, orderId: string, createdById: string | null) {
   // Two items added at nearly the same moment must not each queue a slip: lock on the order while checking and creating.
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`print-kitchen:${orderId}`}))`;
-    const waiting = await tx.printJob.findFirst({ where: { businessId, branchId, orderId, kind: "KITCHEN", status: "QUEUED" }, select: { id: true } });
-    if (waiting) return waiting.id;
-    const job = await tx.printJob.create({ data: { businessId, branchId, kind: "KITCHEN", orderId, createdById }, select: { id: true } });
-    return job.id;
+    const routes: RouteRow[] = await tx.printRoute.findMany({ where: { businessId, branchId, kind: "KITCHEN" }, select: { kind: true, stationKey: true, printerId: true } });
+    const keys = routes.length ? await unprintedStationKeys(tx, businessId, branchId, orderId) : [];
+    // Nothing unprinted: send an empty request to the default printer; it closes itself when collected ("Nothing new to print").
+    const targets = routes.length && keys.length === 0 ? [{ printerId: printerForKind(routes, "KITCHEN"), keys: [] as string[] }] : splitKitchen(routes, keys);
+    const ids: string[] = [];
+    for (const t of targets) {
+      const waiting = await tx.printJob.findFirst({ where: { businessId, branchId, orderId, kind: "KITCHEN", status: "QUEUED", printerId: t.printerId }, select: { id: true, stationKeys: true } });
+      if (waiting) {
+        // A later item for another station of the same printer joins the slip that is already waiting.
+        if (waiting.stationKeys.length > 0) {
+          const merged = t.keys.length === 0 ? [] : [...new Set([...waiting.stationKeys, ...t.keys])];
+          if (merged.length !== waiting.stationKeys.length) await tx.printJob.update({ where: { id: waiting.id }, data: { stationKeys: merged } });
+        }
+        ids.push(waiting.id);
+        continue;
+      }
+      const job = await tx.printJob.create({ data: { businessId, branchId, kind: "KITCHEN", orderId, createdById, printerId: t.printerId, stationKeys: t.keys }, select: { id: true } });
+      ids.push(job.id);
+    }
+    return ids[0]!;
   });
 }
 
@@ -47,6 +80,12 @@ export async function autoQueueKitchenSlip(businessId: string, branchId: string,
   } catch {
     // a printing problem must never stop an order being taken
   }
+}
+
+/** The default printer for a bill or credit note at this branch, or null (any printer program that names none). */
+async function routedPrinter(businessId: string, branchId: string, kind: string): Promise<string | null> {
+  const routes = await db.printRoute.findMany({ where: { businessId, branchId, kind }, select: { kind: true, stationKey: true, printerId: true } });
+  return printerForKind(routes, kind);
 }
 
 /** Staff press "Send to printer": queue a document. */
@@ -61,12 +100,14 @@ export async function queueDocument(ctx: TenantContext, kind: DocKind, id: strin
   if (kind === "invoice") {
     const inv = await db.invoice.findFirst({ where: { id, businessId, branchId }, select: { id: true } });
     if (!inv) throw new DomainError("Invoice not found.");
-    const job = await db.printJob.create({ data: { businessId, branchId, kind: "RECEIPT", invoiceId: id, createdById: ctx.userId }, select: { id: true } });
+    const printerId = await routedPrinter(businessId, branchId, "RECEIPT");
+    const job = await db.printJob.create({ data: { businessId, branchId, kind: "RECEIPT", invoiceId: id, createdById: ctx.userId, printerId }, select: { id: true } });
     return job.id;
   }
   const note = await db.creditNote.findFirst({ where: { id, businessId, invoice: { branchId } }, select: { id: true } });
   if (!note) throw new DomainError("Credit note not found.");
-  const job = await db.printJob.create({ data: { businessId, branchId, kind: "CREDIT_NOTE", creditNoteId: id, createdById: ctx.userId }, select: { id: true } });
+  const printerId = await routedPrinter(businessId, branchId, "CREDIT_NOTE");
+  const job = await db.printJob.create({ data: { businessId, branchId, kind: "CREDIT_NOTE", creditNoteId: id, createdById: ctx.userId, printerId }, select: { id: true } });
   return job.id;
 }
 
@@ -116,13 +157,15 @@ function systemCtx(businessId: string, branchId: string): TenantContext {
  * Hand out up to `limit` waiting jobs (oldest first) and mark them collected. A kitchen slip that turns out to have nothing
  * new on it is closed instead of printed.
  */
-export async function collectJobs(businessId: string, opts: { branchId?: string; limit?: number } = {}): Promise<AgentJob[]> {
+export async function collectJobs(businessId: string, opts: { branchId?: string; printerId?: string; limit?: number } = {}): Promise<AgentJob[]> {
   const cfg = await getPrintConfig(businessId);
   const reclaim = new Date(Date.now() - RECLAIM_MS);
   const candidates = await db.printJob.findMany({
     where: {
       businessId,
       ...(opts.branchId ? { branchId: opts.branchId } : {}),
+      // A program that names its printer gets that printer's jobs; one that does not gets the jobs routed to no printer in particular.
+      printerId: opts.printerId ?? null,
       status: "QUEUED",
       attempts: { lt: MAX_ATTEMPTS },
       OR: [{ claimedAt: null }, { claimedAt: { lt: reclaim } }],
@@ -140,15 +183,26 @@ export async function collectJobs(businessId: string, opts: { branchId?: string;
     if (claimed.count === 0) continue;
     try {
       const ctx = systemCtx(businessId, job.branchId);
-      const kind: DocKind = job.kind === "KITCHEN" ? "kitchen" : job.kind === "RECEIPT" ? "invoice" : "credit-note";
-      const id = job.orderId ?? job.invoiceId ?? job.creditNoteId;
-      if (!id) throw new DomainError("The job has nothing to print.");
-      const page = paperFor(cfg);
+      const printer = job.printerId ? await db.printer.findFirst({ where: { id: job.printerId, businessId }, select: { name: true, paperWidthMm: true } }) : null;
+      // A printer with its own paper width (a narrow kitchen roll next to an 80 mm bill roll) lays the slip out for that width.
+      const page = paperFor({ ...cfg, paperWidthMm: printer?.paperWidthMm ?? cfg.paperWidthMm });
       const cols = printerColumns(page.widthMm);
-      const { lines, itemIds } = await documentLines(ctx, kind, id, cols, cfg, { onlyUnprinted: kind === "kitchen" });
-      if (kind === "kitchen" && itemIds.length === 0) {
-        await db.printJob.update({ where: { id: job.id }, data: { status: "CANCELLED", error: "Nothing new to print." } });
-        continue;
+      let lines;
+      let itemIds: string[] = [];
+      if (job.kind === "TEST") {
+        const branch = await db.branch.findFirst({ where: { id: job.branchId, businessId }, select: { name: true } });
+        lines = layoutTest({ printer: printer?.name ?? "Printer", branch: branch?.name ?? "", when: new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }), paperMm: page.widthMm }, cols);
+      } else {
+        const kind: DocKind = job.kind === "KITCHEN" ? "kitchen" : job.kind === "RECEIPT" ? "invoice" : "credit-note";
+        const id = job.orderId ?? job.invoiceId ?? job.creditNoteId;
+        if (!id) throw new DomainError("The job has nothing to print.");
+        const doc = await documentLines(ctx, kind, id, cols, cfg, { onlyUnprinted: kind === "kitchen", stationKeys: job.stationKeys });
+        lines = doc.lines;
+        itemIds = doc.itemIds;
+        if (kind === "kitchen" && itemIds.length === 0) {
+          await db.printJob.update({ where: { id: job.id }, data: { status: "CANCELLED", error: "Nothing new to print." } });
+          continue;
+        }
       }
       await db.printJob.update({ where: { id: job.id }, data: { itemIds } });
       out.push({

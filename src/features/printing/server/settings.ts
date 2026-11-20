@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/server/db";
 import type { TenantContext } from "@/server/auth";
 import { can } from "@/server/permissions";
 import { DomainError } from "@/server/errors";
 import { audit } from "@/server/audit";
 import { clampInt, DEFAULT_LAYOUT, PAPER_LIMITS, type LayoutSettings } from "../layout";
+import { cleanFields, DEFAULT_FIELDS, type SlipFields } from "../slip-fields";
 
 /**
  * How this business's slips are laid out: paper size (any width, fixed or automatic height), margins, text size and what
@@ -29,6 +31,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   fontSizeTenthPt: 90,
   autoKitchenPrint: false,
   receiptCopies: 1,
+  fields: DEFAULT_FIELDS,
 };
 
 type Row = Awaited<ReturnType<typeof db.printSetting.findUnique>>;
@@ -48,6 +51,7 @@ function fromRow(r: Row): PrintConfig {
     kitchenLargeText: r.kitchenLargeText,
     autoKitchenPrint: r.autoKitchenPrint,
     receiptCopies: r.receiptCopies,
+    fields: cleanFields(r.slipFields),
   };
 }
 
@@ -104,6 +108,16 @@ export async function savePrintConfig(ctx: TenantContext, input: PrintConfigInpu
   await db.$transaction(async (tx) => {
     await tx.printSetting.upsert({ where: { businessId: ctx.businessId }, create: { businessId: ctx.businessId, ...data }, update: data });
     await audit(tx, ctx, "print.settings", "Business", ctx.businessId, { paper: `${data.paperWidthMm}x${data.paperHeightMm ?? "auto"}`, auto: data.autoKitchenPrint });
+  });
+}
+
+/** Which fields print on kitchen slips and bills. Anyone who manages printing may change them. */
+export async function saveSlipFields(ctx: TenantContext, fields: SlipFields) {
+  if (!can(ctx, "print.manage")) throw new DomainError("You do not have permission to change print settings.");
+  const clean = cleanFields(fields);
+  await db.$transaction(async (tx) => {
+    await tx.printSetting.upsert({ where: { businessId: ctx.businessId }, create: { businessId: ctx.businessId, slipFields: clean as unknown as Prisma.InputJsonValue }, update: { slipFields: clean as unknown as Prisma.InputJsonValue } });
+    await audit(tx, ctx, "print.fields", "Business", ctx.businessId, { kot: Object.values(clean.kot).filter(Boolean).length, bill: Object.values(clean.bill).filter(Boolean).length });
   });
 }
 

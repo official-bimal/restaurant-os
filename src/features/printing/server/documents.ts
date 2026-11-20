@@ -86,7 +86,7 @@ export async function getCreditNote(ctx: TenantContext, creditNoteId: string) {
 }
 
 /** What the kitchen needs to cook for an order: its live items by station, with notes and add-ons. */
-export async function getKitchenSlip(ctx: TenantContext, orderId: string, opts: { onlyUnprinted?: boolean } = {}) {
+export async function getKitchenSlip(ctx: TenantContext, orderId: string, opts: { onlyUnprinted?: boolean; stationKeys?: readonly string[] } = {}) {
   if (!can(ctx, "order.edit") && !can(ctx, "kitchen.update")) throw new DomainError("You do not have permission to print kitchen tickets.");
   const { businessId, branchId } = scope(ctx);
   const order = await db.order.findFirst({
@@ -103,9 +103,13 @@ export async function getKitchenSlip(ctx: TenantContext, orderId: string, opts: 
     include: { station: { select: { name: true } } },
   });
   const stationOf = new Map(overrides.map((o) => [o.menuItemId, o.station?.name ?? null]));
-  const [head] = await Promise.all([header(businessId, branchId)]);
+  // The station id each dish goes to (a branch override wins), so a slip can be limited to the stations one printer handles.
+  const keyOf = new Map(overrides.map((o) => [o.menuItemId, o.stationId ?? ""]));
+  const [head, waiter] = await Promise.all([header(businessId, branchId), order.createdById ? db.user.findUnique({ where: { id: order.createdById }, select: { name: true } }) : null]);
+  const keys = opts.stationKeys && opts.stationKeys.length > 0 ? new Set(opts.stationKeys) : null;
   const live = order.items
     .filter((i) => !opts.onlyUnprinted || i.printedAt === null)
+    .filter((i) => !keys || keys.has(keyOf.get(i.menuItemId) ?? i.menuItem.stationId ?? ""))
     .map((i) => ({
     id: i.id,
     name: i.name,
@@ -121,6 +125,7 @@ export async function getKitchenSlip(ctx: TenantContext, orderId: string, opts: 
     type: order.type,
     table: order.table?.label ?? null,
     note: order.note,
+    waiter: waiter?.name ?? null,
     createdAt: order.createdAt,
     groups: groupByStation(live),
   };

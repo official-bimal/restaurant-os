@@ -1,5 +1,6 @@
 import { formatNpr } from "@/features/billing/calc";
 import type { PdfLine } from "@/lib/pdf";
+import { DEFAULT_FIELDS, type SlipFields } from "./slip-fields";
 
 /**
  * What goes on a receipt, a credit note and a kitchen slip, as plain lines of text for a paper that is `cols` characters
@@ -13,6 +14,8 @@ export interface LayoutSettings {
   showAddress: boolean;
   showCustomer: boolean;
   kitchenLargeText: boolean;
+  /** Which fields print on kitchen slips and bills. Missing: every field's usual setting. */
+  fields?: SlipFields;
 }
 
 export const DEFAULT_LAYOUT: LayoutSettings = {
@@ -132,18 +135,19 @@ export function layoutReceipt(d: ReceiptData, s: LayoutSettings, cols: number): 
   add(rule(cols));
   add(center("TAX INVOICE", cols), { bold: true });
   if (d.copy) add(center(d.copy, cols), { bold: true });
-  rows(`Invoice #${d.label ?? d.invoiceNumber}`, d.orderNumber === null ? "Offline sale" : `Order #${d.orderNumber}`);
+  const f = (s.fields ?? DEFAULT_FIELDS).bill;
+  rows(`Invoice #${d.label ?? d.invoiceNumber}`, d.orderNumber === null ? "Offline sale" : f.orderNumber ? `Order #${d.orderNumber}` : "");
   add(d.when);
-  if (d.bsDate) add(`Miti: ${d.bsDate} BS`);
+  if (d.bsDate && f.bsDate) add(`Miti: ${d.bsDate} BS`);
   if (d.buyerName) wrap(`Buyer: ${d.buyerName}`, cols).forEach((t) => add(t));
   if (d.buyerPan) add(`Buyer PAN: ${d.buyerPan}`);
-  add(d.where);
+  if (f.table) add(d.where);
   if (s.showCustomer && d.customer) rows(`Customer: ${d.customer}`, "");
   add(rule(cols));
   for (const l of d.lines) {
     rows(`${l.quantity} x ${l.name}`, l.complimentary ? "free" : money(l.total));
-    if (l.addOns.length) wrap(`+ ${l.addOns.join(", ")}`, cols - 2).forEach((t) => add(`  ${t}`));
-    if (l.note) wrap(`(${l.note})`, cols - 2).forEach((t) => add(`  ${t}`));
+    if (f.itemDetails && l.addOns.length) wrap(`+ ${l.addOns.join(", ")}`, cols - 2).forEach((t) => add(`  ${t}`));
+    if (f.itemDetails && l.note) wrap(`(${l.note})`, cols - 2).forEach((t) => add(`  ${t}`));
   }
   add(rule(cols));
   rows("Subtotal", money(d.subtotal));
@@ -157,7 +161,7 @@ export function layoutReceipt(d: ReceiptData, s: LayoutSettings, cols: number): 
   add(rule(cols));
   rows("TOTAL", money(d.grandTotal), { bold: true });
   add(rule(cols));
-  for (const p of d.payments) rows(`Paid by ${p.method.toLowerCase()}`, money(p.amount));
+  if (f.payments) for (const p of d.payments) rows(`Paid by ${p.method.toLowerCase()}`, money(p.amount));
   if (d.creditNotes.length) {
     add(rule(cols));
     for (const c of d.creditNotes) rows(`Refunded (credit note #${c.number})`, neg(c.amount));
@@ -232,6 +236,8 @@ export interface KitchenData {
   title: string;
   number: number;
   time: string;
+  /** The waiter who took the order, when known. */
+  waiter?: string | null;
   note: string | null;
   groups: { station: string; items: { quantity: number; name: string; note: string | null; addOns: string[] }[] }[];
 }
@@ -239,20 +245,49 @@ export interface KitchenData {
 export function layoutKitchen(d: KitchenData, s: LayoutSettings, cols: number): PdfLine[] {
   const L: PdfLine[] = [];
   const add = (text: string, o: Omit<PdfLine, "text"> = {}) => L.push({ text, ...o });
+  const f = (s.fields ?? DEFAULT_FIELDS).kot;
   const big = s.kitchenLargeText ? 2 : 1;
   const bigCols = Math.max(8, Math.floor(cols / big));
-  wrap(`${d.title} #${d.number}`, bigCols).forEach((t) => add(center(t, bigCols), { bold: true, size: big }));
-  add(center(`${d.branch} - ${d.time}`, cols));
-  if (d.note) wrap(`NOTE: ${d.note}`, cols).forEach((t) => add(t, { bold: true }));
+  const head = [f.table ? d.title : null, f.orderNumber ? `#${d.number}` : null].filter(Boolean).join(" ") || "ORDER";
+  wrap(head, bigCols).forEach((t) => add(center(t, bigCols), { bold: true, size: big }));
+  const sub = [f.branch ? d.branch : null, f.time ? d.time : null].filter(Boolean).join(" - ");
+  if (sub) add(center(sub, cols));
+  if (f.waiter && d.waiter) add(center(`Taken by ${d.waiter}`, cols));
+  if (f.orderNote && d.note) wrap(`NOTE: ${d.note}`, cols).forEach((t) => add(t, { bold: true }));
   if (d.groups.length === 0) add("Nothing to cook.");
+  let count = 0;
   for (const g of d.groups) {
     add(rule(cols));
-    add(g.station.toUpperCase(), { bold: true });
+    if (f.station) add(g.station.toUpperCase(), { bold: true });
     for (const i of g.items) {
+      count += i.quantity;
       wrap(`${i.quantity} x ${i.name}`, bigCols).forEach((t) => add(t, { bold: true, size: big }));
-      if (i.addOns.length) wrap(`+ ${i.addOns.join(", ")}`, cols - 3).forEach((t) => add(`   ${t}`));
-      if (i.note) wrap(`** ${i.note} **`, cols - 3).forEach((t) => add(`   ${t}`, { bold: true }));
+      if (f.addOns && i.addOns.length) wrap(`+ ${i.addOns.join(", ")}`, cols - 3).forEach((t) => add(`   ${t}`));
+      if (f.itemNote && i.note) wrap(`** ${i.note} **`, cols - 3).forEach((t) => add(`   ${t}`, { bold: true }));
     }
   }
+  if (f.itemCount && count > 0) {
+    add(rule(cols));
+    add(`Items: ${count}`, { bold: true });
+  }
   return L;
+}
+
+// --- test page ----------------------------------------------------------------------
+
+/** A short page to prove a printer is wired up: its name, a ruler as wide as the paper, and a line of text in each size. */
+export function layoutTest(d: { printer: string; branch: string; when: string; paperMm: number }, cols: number): PdfLine[] {
+  const ruler = "1234567890".repeat(Math.ceil(cols / 10)).slice(0, cols);
+  return [
+    { text: center("TEST PAGE", Math.max(8, Math.floor(cols / 2))), bold: true, size: 2 },
+    { text: center(d.printer, cols), bold: true },
+    { text: center(d.branch, cols) },
+    { text: center(d.when, cols) },
+    { text: rule(cols) },
+    { text: ruler },
+    { text: `Paper ${d.paperMm} mm, ${cols} characters` },
+    { text: rule(cols) },
+    { text: "If you can read this clearly, the printer is set up.", bold: false },
+    { text: "" },
+  ];
 }

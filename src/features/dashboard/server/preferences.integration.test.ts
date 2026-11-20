@@ -65,7 +65,9 @@ describe("dashboard layout persistence", () => {
     const again = await getEditorState({ ...a.owner });
     expect(again.customised).toBe(true);
     expect(again.current.desktop.visible.slice(0, 2).map((p) => p.id)).toEqual(["floor", "openOrders"]);
-    expect(again.current.desktop.hidden.map((p) => p.id)).toEqual(["salesToday"]);
+    // Hidden by choice, plus the cards the standard Classic layout leaves off until switched on.
+    expect(again.current.desktop.hidden.map((p) => p.id)).toEqual(expect.arrayContaining(["salesToday", "revenue7"]));
+    expect(again.current.desktop.hidden.map((p) => p.id)).not.toContain("floor");
     expect(again.current.mobile.visible.map((p) => p.id).slice(0, 2)).toEqual(["openOrders", "floor"]);
     expect(await db.userPreference.count({ where: { userId: a.owner.userId } })).toBe(1);
   });

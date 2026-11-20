@@ -219,6 +219,7 @@ model Business {
   stations         Station[]
   auditEvents      AuditEvent[]
   customRoles      CustomRole[]
+  printers         Printer[]
   preferences      UserPreference[]
   logo             BusinessLogo?
   trash            TrashItem[]
@@ -287,9 +288,9 @@ model Membership {
   overtimeAfterMinutes Int      @default(480)
   createdAt            DateTime @default(now())
 
-  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branches MembershipBranch[]
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branches   MembershipBranch[]
   customRole CustomRole?        @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   @@unique([userId, businessId])
@@ -1162,6 +1163,7 @@ model Branch {
   purchaseOrders      PurchaseOrder[]
   transfersOut        StockTransfer[]      @relation("TransferFrom")
   transfersIn         StockTransfer[]      @relation("TransferTo")
+  printers            Printer[]
   menuSchedules       MenuSchedule[]
   /// Menu set chosen by hand for this branch. Null: follow the schedule, or the whole menu when none applies.
   activeMenuSetId     String?
@@ -1825,6 +1827,8 @@ model PrintSetting {
   /// Queue a kitchen slip for a connected printer whenever items are added to an order.
   autoKitchenPrint Boolean  @default(false)
   receiptCopies    Int      @default(1)
+  /// Which fields print on a kitchen slip and on a bill: { kot: { orderNumber: true, ... }, bill: { ... } }. Null: every field's usual setting.
+  slipFields       Json?
   /// Fingerprint (SHA-256) of the key the printer program uses to collect jobs. The key itself is never kept.
   agentKeyHash     String?
   updatedAt        DateTime @updatedAt
@@ -1851,11 +1855,16 @@ model PrintJob {
   claimedAt    DateTime?
   /// The order items on a kitchen slip, so exactly those are marked printed once the printer confirms.
   itemIds      String[]  @default([])
+  /// The printer this job is for. Null: any printer program that does not name one (how a single printer always worked).
+  printerId    String?
+  /// For a kitchen slip routed by station: only items of these stations (a station id, or empty text for dishes with none). Empty: all.
+  stationKeys  String[]  @default([])
   createdById  String?
   createdAt    DateTime  @default(now())
   printedAt    DateTime?
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  printer  Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
 
   @@index([businessId, branchId, status, createdAt])
 }
@@ -2667,4 +2676,44 @@ model UserPreference {
 
   @@id([userId, businessId])
   @@index([businessId])
+}
+
+/// A physical printer at a branch. A small program next to it asks the app for its jobs by printer id.
+model Printer {
+  id           String    @id @default(cuid())
+  businessId   String
+  branchId     String
+  name         String
+  /// Paper width of this printer in mm, or null to use the business setting.
+  paperWidthMm Int?
+  /// When its program last asked for work, so the app can tell whether anything is listening.
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  business Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch       @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+  jobs     PrintJob[]
+  routes   PrintRoute[]
+
+  @@unique([businessId, id])
+  @@unique([branchId, name])
+  @@index([businessId, branchId])
+}
+
+/// Which printer gets which slip at a branch. Kitchen slips can go by station (a Bar printer and a Grill printer); a route with no station
+/// is the default for that kind. Receipts and credit notes use the default only.
+model PrintRoute {
+  id         String @id @default(cuid())
+  businessId String
+  branchId   String
+  /// KITCHEN, RECEIPT or CREDIT_NOTE.
+  kind       String
+  /// A station id for a kitchen route, or empty text for the default.
+  stationKey String @default("")
+  printerId  String
+
+  printer Printer @relation(fields: [printerId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, kind, stationKey])
+  @@index([businessId, branchId])
 }

@@ -2,7 +2,9 @@ import { requireTenant } from "@/server/auth";
 import { charsPerLine } from "@/lib/pdf";
 import { getPrintConfig, hasAgentKey, paperFor } from "@/features/printing/server/settings";
 import { listJobs } from "@/features/printing/server/queue";
-import { layoutKitchen, layoutReceipt, type KitchenData, type ReceiptData } from "@/features/printing/layout";
+import { layoutKitchen, layoutReceipt } from "@/features/printing/layout";
+import { SAMPLE_KITCHEN, SAMPLE_RECEIPT } from "@/features/printing/samples";
+import { PrintingTabs } from "./printing-tabs";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { AgentKeyBox } from "./agent-key";
 import { cancelJobAction, retryJobAction, savePrintSettingsAction } from "./actions";
@@ -10,44 +12,6 @@ import { cancelJobAction, retryJobAction, savePrintSettingsAction } from "./acti
 export const dynamic = "force-dynamic";
 
 const input = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-base";
-
-const SAMPLE_RECEIPT: ReceiptData = {
-  business: "Your Cafe",
-  pan: "123456789",
-  branch: "Main branch",
-  address: "Lakeside, Pokhara",
-  invoiceNumber: 1042,
-  orderNumber: 217,
-  when: "16 Nov 2026, 12:29",
-  where: "Table 4",
-  customer: "Sita Rai",
-  lines: [
-    { name: "Buff Momo", quantity: 2, total: 50_000, complimentary: false, note: "extra spicy", addOns: ["Cheese"] },
-    { name: "Masala Tea", quantity: 2, total: 16_000, complimentary: false, note: null, addOns: [] },
-    { name: "Water", quantity: 1, total: 0, complimentary: true, note: null, addOns: [] },
-  ],
-  subtotal: 66_000,
-  discount: 6_600,
-  loyaltyDiscount: 0,
-  serviceCharge: 5_940,
-  vat: 7_722,
-  deliveryFee: 0,
-  roundOff: 38,
-  grandTotal: 73_100,
-  payments: [{ method: "CASH", amount: 50_000 }, { method: "QR", amount: 23_100 }],
-  creditNotes: [],
-};
-const SAMPLE_KITCHEN: KitchenData = {
-  branch: "Main branch",
-  title: "Table 4",
-  number: 217,
-  time: "12:29",
-  note: "Allergy: no nuts",
-  groups: [
-    { station: "Grill", items: [{ quantity: 2, name: "Buff Momo", note: "extra spicy", addOns: ["Cheese"] }] },
-    { station: "Bar", items: [{ quantity: 2, name: "Masala Tea", note: null, addOns: [] }] },
-  ],
-};
 
 const STATUS_TONE: Record<string, string> = { QUEUED: "bg-amber-100 text-amber-900", PRINTED: "bg-green-100 text-green-900", FAILED: "bg-red-100 text-red-800", CANCELLED: "bg-stone-200 text-stone-700" };
 
@@ -77,6 +41,7 @@ export default async function PrintingPage({ searchParams }: PageProps<"/printin
         <h1 className="text-2xl font-semibold">Printing</h1>
         <p className="text-sm text-stone-500">Paper size, what goes on a slip, and the queue for a connected printer.</p>
       </div>
+      <PrintingTabs current="/printing" />
 
       {typeof q.error === "string" && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
@@ -179,7 +144,7 @@ export default async function PrintingPage({ searchParams }: PageProps<"/printin
           <ul className="divide-y divide-stone-100 text-sm">
             {jobs.map((j) => (
               <li key={j.id} className="flex flex-wrap items-center gap-2 py-2">
-                <span className="w-24 font-medium">{j.kind === "KITCHEN" ? "Kitchen slip" : j.kind === "RECEIPT" ? "Receipt" : "Credit note"}</span>
+                <span className="w-24 font-medium">{j.kind === "KITCHEN" ? "Kitchen slip" : j.kind === "RECEIPT" ? "Receipt" : j.kind === "TEST" ? "Test page" : "Credit note"}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[j.status] ?? ""}`}>{j.status.toLowerCase()}</span>
                 <span className="text-stone-500">{j.createdAt.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                 {j.attempts > 0 && j.status !== "PRINTED" && <span className="text-xs text-stone-500">tried {j.attempts}×</span>}

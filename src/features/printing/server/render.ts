@@ -29,7 +29,7 @@ export async function documentLines(
   id: string,
   cols: number,
   cfg: PrintConfig,
-  opts: { onlyUnprinted?: boolean } = {},
+  opts: { onlyUnprinted?: boolean; stationKeys?: readonly string[] } = {},
 ): Promise<{ lines: PdfLine[]; name: string; itemIds: string[] }> {
   if (kind === "invoice") {
     const r = await getReceipt(ctx, id);
@@ -93,13 +93,14 @@ export async function documentLines(
     };
     return { lines: layoutCreditNote(data, cfg, cols), name: `credit-note-${n.number}`, itemIds: [] };
   }
-  const k = await getKitchenSlip(ctx, id, { onlyUnprinted: opts.onlyUnprinted });
+  const k = await getKitchenSlip(ctx, id, { onlyUnprinted: opts.onlyUnprinted, stationKeys: opts.stationKeys });
   const data: KitchenData = {
     branch: k.branch,
     title: k.table ?? TYPE[k.type] ?? k.type,
     number: k.number,
     time: k.createdAt.toLocaleTimeString("en-GB", { timeZone: k.timezone, hour: "2-digit", minute: "2-digit" }),
     note: k.note,
+    waiter: k.waiter,
     groups: k.groups.map((g) => ({ station: g.station, items: g.items.map((i) => ({ quantity: i.quantity, name: i.name, note: i.note, addOns: i.addOns })) })),
   };
   return { lines: layoutKitchen(data, cfg, cols), name: `kitchen-${k.number}`, itemIds: k.groups.flatMap((g) => g.items.map((i) => i.id)) };
