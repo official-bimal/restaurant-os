@@ -39,7 +39,7 @@ export async function cancelOrder(ctx: TenantContext, orderId: string, rawReason
     // Cancelling something with food on it needs authority; an empty order a waiter opened by mistake does not.
     const active = order.items.filter((i) => i.status !== "CANCELLED");
     const needed = active.length > 0 ? "order.void" : "order.edit";
-    if (!can(ctx.role, needed)) throw new DomainError("You do not have permission to cancel this order.");
+    if (!can(ctx, needed)) throw new DomainError("You do not have permission to cancel this order.");
 
     const now = new Date();
     await tx.orderItem.updateMany({
@@ -84,7 +84,7 @@ type Part = "subtotal" | "discount" | "loyaltyDiscount" | "serviceCharge" | "vat
  * put back in stock. Checked and written under a lock on the invoice, so two refunds at once cannot overshoot.
  */
 export async function refundInvoice(ctx: TenantContext, invoiceId: string, rawReason: string, opts: { amount?: number; method?: string; returnReward?: boolean } = {}) {
-  if (!can(ctx.role, "bill.refund")) throw new DomainError("You do not have permission to refund bills.");
+  if (!can(ctx, "bill.refund")) throw new DomainError("You do not have permission to refund bills.");
   const reason = cleanReason(rawReason);
   const { businessId, branchId } = scope(ctx);
   if (opts.method !== undefined && !["CASH", "QR", "CARD", "CREDIT"].includes(opts.method)) throw new DomainError("Choose how the money is handed back.");

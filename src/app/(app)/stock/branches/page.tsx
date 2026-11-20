@@ -27,7 +27,7 @@ export default async function StockBranchesPage({ searchParams }: PageProps<"/st
     listStock(ctx),
     db.branch.findUniqueOrThrow({ where: { businessId_id: { businessId: ctx.businessId, id: ctx.branchId } }, select: { name: true } }),
   ]);
-  const canMove = can(ctx.role, "stock.manage");
+  const canMove = can(ctx, "stock.manage");
 
   return (
     <div className="space-y-6">

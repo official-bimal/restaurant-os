@@ -14,7 +14,7 @@ import { ensureLevels } from "./levels";
  */
 
 function needReport(ctx: TenantContext) {
-  if (!can(ctx.role, "report.view") || !can(ctx.role, "stock.view")) {
+  if (!can(ctx, "report.view") || !can(ctx, "stock.view")) {
     throw new DomainError("You do not have permission to see the stock value report.");
   }
 }

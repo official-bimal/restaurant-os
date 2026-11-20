@@ -32,7 +32,7 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/acc
   const status = sp.status === "done" || sp.status === "reversed" ? sp.status : "";
   const q = typeof sp.q === "string" ? sp.q.slice(0, 60) : "";
   const [accounts, r] = await Promise.all([listMoneyAccounts(ctx), listTransactions(ctx, { from, to, type: type || undefined, moneyAccountId: account || undefined, q: q || undefined, status: status || undefined })]);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   const cards: [string, number][] = [
     ["Sales", r.cards.sales],
     ["Purchase", r.cards.purchase],

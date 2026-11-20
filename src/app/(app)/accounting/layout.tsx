@@ -7,7 +7,7 @@ export default async function AccountingLayout({ children }: LayoutProps<"/accou
   const ctx = await requireTenant("books.view");
   return (
     <div className="lg:flex lg:gap-8">
-      <AccountingNav canManage={can(ctx.role, "books.manage")} />
+      <AccountingNav canManage={can(ctx, "books.manage")} />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

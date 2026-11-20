@@ -16,7 +16,7 @@ import { getBranchRollup } from "@/features/reports/server/service";
 export const MAX_EXPORT_DAYS = 366;
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can export the books.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can export the books.");
 }
 
 export async function buildAccountantWorkbook(ctx: TenantContext, from: string, to: string) {

@@ -17,7 +17,7 @@ const AGE_STYLE: Record<TicketAge, string> = {
 export default async function KitchenPage() {
   const ctx = await requireTenant();
   const tickets = await kitchenTickets(ctx);
-  const canUpdate = can(ctx.role, "kitchen.update");
+  const canUpdate = can(ctx, "kitchen.update");
 
   const byStation = new Map<string, typeof tickets>();
   for (const t of tickets) {

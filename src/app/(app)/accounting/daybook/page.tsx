@@ -12,7 +12,7 @@ export default async function DaybookPage({ searchParams }: PageProps<"/accounti
   const p = await currentPeriod(ctx);
   const { from, to } = pickRange(sp, { from: p.today, to: p.today });
   const { entries, totalDebit } = await getDaybook(ctx, from, to);
-  const canFix = can(ctx.role, "books.manage");
+  const canFix = can(ctx, "books.manage");
   const back = `/accounting/daybook?from=${from}&to=${to}`;
   return (
     <div className="space-y-4">

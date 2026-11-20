@@ -13,7 +13,7 @@ import { bestDeal, localDayMinute, type DealDef, type DealLine } from "../deals"
 type Db = Pick<Tx, "deal" | "menuItem">;
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change deals.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change deals.");
 }
 
 async function loadDeals(client: Db, businessId: string, branchId: string): Promise<DealDef[]> {

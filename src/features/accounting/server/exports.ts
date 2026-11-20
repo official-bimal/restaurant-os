@@ -32,7 +32,7 @@ export const EXPORT_LABEL: Record<ExportKind, string> = {
 };
 
 export async function buildExport(ctx: TenantContext, kind: string, q: { from: string; to: string; account?: string }): Promise<{ filename: string; csv: string }> {
-  if (!can(ctx.role, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
+  if (!can(ctx, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
   if (!(EXPORT_KINDS as readonly string[]).includes(kind)) throw new DomainError("Unknown export.");
   if (!isValidDate(q.from) || !isValidDate(q.to) || q.from > q.to) throw new DomainError("Choose valid dates.");
   const { from, to } = q;

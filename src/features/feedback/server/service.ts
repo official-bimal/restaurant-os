@@ -167,7 +167,7 @@ export async function dishRatingsFor(businessId: string, menuItemIds: string[]):
 // --- staff side ----------------------------------------------------------------
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "feedback.view")) throw new DomainError("You do not have permission to see feedback.");
+  if (!can(ctx, "feedback.view")) throw new DomainError("You do not have permission to see feedback.");
 }
 
 export async function listFeedback(ctx: TenantContext, days = 30) {
@@ -209,7 +209,7 @@ export async function listDishRatings(ctx: TenantContext, days = 30) {
 
 /** Low ratings nobody has looked into yet (all time): the number on the nav badge. */
 export async function unresolvedCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "feedback.view")) return 0;
+  if (!can(ctx, "feedback.view")) return 0;
   return db.feedback.count({ where: { businessId: ctx.businessId, rating: { lte: LOW_RATING_MAX }, handledAt: null } });
 }
 

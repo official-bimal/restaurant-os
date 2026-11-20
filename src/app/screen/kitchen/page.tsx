@@ -25,10 +25,10 @@ export default async function KitchenScreen({ searchParams }: PageProps<"/screen
   const ctx = await requireTenant();
   const sp = await searchParams;
   const station = typeof sp.station === "string" ? sp.station : "";
-  const [all, hukkas] = await Promise.all([kitchenTickets(ctx), can(ctx.role, "order.edit") || can(ctx.role, "kitchen.update") ? listRunningHukkas(ctx) : Promise.resolve([])]);
+  const [all, hukkas] = await Promise.all([kitchenTickets(ctx), can(ctx, "order.edit") || can(ctx, "kitchen.update") ? listRunningHukkas(ctx) : Promise.resolve([])]);
   const stations = [...new Set(all.map((t) => t.menuItem.station?.name ?? "Unassigned"))].sort();
   const tickets = station ? all.filter((t) => (t.menuItem.station?.name ?? "Unassigned") === station) : all;
-  const canUpdate = can(ctx.role, "kitchen.update");
+  const canUpdate = can(ctx, "kitchen.update");
   const back = `/screen/kitchen${station ? `?station=${encodeURIComponent(station)}` : ""}`;
   const now = new Date();
   const late = tickets.filter((t) => t.status !== "READY" && ticketAge(t.ageMinutes, t.menuItem.prepMinutes) === "LATE").length;

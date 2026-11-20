@@ -19,7 +19,7 @@ import { deliveryState, isComplete, orderText, remaining, suggestQuantity } from
  */
 
 function need(ctx: TenantContext, permission: Permission = "stock.manage") {
-  if (!can(ctx.role, permission)) throw new DomainError("You do not have permission to do that.");
+  if (!can(ctx, permission)) throw new DomainError("You do not have permission to do that.");
 }
 
 const MAX_QTY = 1_000_000_000;

@@ -221,3 +221,10 @@ Limits: ingredient cost uses today's average cost, not the cost on the day of th
 - **Settings, Business profile** (owner): legal name, PAN, address, phone, email, type, opening date, website and social links, and a logo (PNG, JPEG or WebP under 300 KB). The legal name and head-office address are what bills print (a branch address still wins when it has one).
 - **Settings, Trash** (menu managers): a deleted dish is kept for 30 days with its price, category, Nepali name and recipe, and can be put back or deleted for good. Only dishes are kept; a dish whose category was deleted cannot go back until the category is made again. Customer erasure is deliberately not kept, so a privacy request really erases.
 - **Settings, Activity log** (owner): every audited change by anyone, with who, when and plain wording, filtered by person, dates and a search word. Not built yet: custom roles, printer routing and KOT field choices, notification toggles.
+
+## Custom roles
+
+- **Staff, Roles** (owner only): make roles such as "Shift lead" with a name, colour, a built-in role it works like (decides the kind of screen: kitchen, rider, accountant) and ticked permissions. Give a role to a person on the Staff page; choosing a built-in role there takes it away again.
+- A custom role's ticks replace what the built-in role would give. Owner powers and staff management cannot be ticked, only the owner can make or give roles, and an owner cannot be given one, so a role can never raise anyone to owner level.
+- Under the hood `can()` now takes the signed-in person (it still accepts a plain role); every permission check in the app was switched over, and push notifications to the team follow custom roles too.
+- Deleting a role returns its people to the built-in role it was based on. Not done: per-role branch access (still set per person) and not viewed in a browser, only covered by tests.

@@ -27,7 +27,7 @@ export interface DeviceBlock {
 }
 
 function needBill(ctx: TenantContext) {
-  if (!can(ctx.role, "bill.checkout") || !can(ctx.role, "order.create")) throw new DomainError("You do not have permission to bill.");
+  if (!can(ctx, "bill.checkout") || !can(ctx, "order.create")) throw new DomainError("You do not have permission to bill.");
 }
 
 function cleanDevice(deviceId: string): string {
@@ -93,7 +93,7 @@ export async function prepareDeviceBlocks(ctx: TenantContext, deviceIdRaw: strin
 // --- the owner's view -----------------------------------------------------------------------
 
 function needOwner(ctx: TenantContext) {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can manage offline invoice numbers.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can manage offline invoice numbers.");
 }
 
 export async function listBlocks(ctx: TenantContext) {

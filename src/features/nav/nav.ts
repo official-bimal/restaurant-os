@@ -1,4 +1,4 @@
-import { can } from "@/server/permissions";
+import { can, type Permission } from "@/server/permissions";
 import type { Role } from "@/generated/prisma/enums";
 
 /**
@@ -26,6 +26,8 @@ export interface NavSection {
 
 export interface NavInput {
   role: Role;
+  /** Set for a custom role: what the person may do. */
+  permissions?: readonly Permission[];
   /** The business works in several branches: shows branch tools. */
   multiBranch: boolean;
   /** The business sells hukka: shows the timer. */
@@ -44,7 +46,7 @@ export interface NavInput {
 
 export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[] } {
   const c = i.counts;
-  const r = i.role;
+  const r = { role: i.role, permissions: i.permissions };
   const when = (ok: boolean, e: NavEntry): NavEntry[] => (ok ? [e] : []);
 
   const home: NavEntry[] = [
@@ -102,8 +104,8 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
       label: "Team",
       items: [
         ...when(can(r, "staff.manage"), { href: "/staff", label: "Staff", icon: "staff", description: "People, roles and logins" }),
-        ...when(r !== "ACCOUNTANT", { href: "/time", label: "My time", icon: "clock", description: "Clock in and out" }),
-        ...when(r !== "ACCOUNTANT", { href: "/roster", label: can(r, "time.manage") ? "Roster" : "My shifts", icon: "clock", description: can(r, "time.manage") ? "Who works when" : "When you work" }),
+        ...when(i.role !== "ACCOUNTANT", { href: "/time", label: "My time", icon: "clock", description: "Clock in and out" }),
+        ...when(i.role !== "ACCOUNTANT", { href: "/roster", label: can(r, "time.manage") ? "Roster" : "My shifts", icon: "clock", description: can(r, "time.manage") ? "Who works when" : "When you work" }),
         ...when(can(r, "drawer.use") || can(r, "payroll.manage"), { href: "/tips", label: "Tips", icon: "feedback", description: "Record tips and share them out" }),
         ...when(can(r, "time.manage"), { href: "/attendance", label: "Attendance", icon: "staff", description: "Who is in today" }),
         ...when(can(r, "payroll.manage"), { href: "/payroll", label: "Payroll", icon: "bills", description: "Pay for hours worked" }),

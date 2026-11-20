@@ -11,7 +11,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   const ctx = await requireTenant("books.view");
   const sp = await searchParams;
   const accounts = await listAccounts(ctx);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Chart of accounts</h1>

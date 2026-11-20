@@ -10,7 +10,7 @@ import { groupRulesForMenu } from "@/features/menu/server/pricing";
 /** Add-on groups and choices ("Size", "Extras"). Business-wide; every query is filtered by businessId. */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
 }
 
 function cleanName(value: string, what: string): string {

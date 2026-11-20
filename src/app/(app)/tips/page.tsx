@@ -20,8 +20,8 @@ export default async function TipsPage({ searchParams }: PageProps<"/tips">) {
   const to = typeof sp.to === "string" && isValidDate(sp.to) ? sp.to : today;
   const basis = sp.basis === "EQUAL" ? "EQUAL" : "HOURS";
   const service = Math.min(100, Math.max(0, Number(typeof sp.service === "string" ? sp.service : "0") || 0));
-  const record = can(ctx.role, "drawer.use");
-  const owner = can(ctx.role, "payroll.manage");
+  const record = can(ctx, "drawer.use");
+  const owner = can(ctx, "payroll.manage");
   const t = await listTips(ctx, from, to);
   const preview = owner ? await previewPayout(ctx, { from, to, basis, servicePercent: service }).catch(() => null) : null;
   return (

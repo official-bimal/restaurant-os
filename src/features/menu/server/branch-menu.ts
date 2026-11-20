@@ -52,7 +52,7 @@ export function effectiveItem(
 }
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
 }
 
 /** Every dish with the shared price and availability next to this branch's own, for the branch menu page. */

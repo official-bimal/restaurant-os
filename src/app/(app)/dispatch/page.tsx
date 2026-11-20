@@ -81,8 +81,8 @@ export default async function DispatchPage({ searchParams }: PageProps<"/dispatc
   const ctx = await requireTenant("order.edit");
   const { error } = await searchParams;
   const [board, runs] = await Promise.all([getDispatchBoard(ctx), listBatches(ctx)]);
-  const accounts = can(ctx.role, "rider.settle") ? await getRiderAccounts(ctx) : [];
-  const canPay = can(ctx.role, "staff.manage");
+  const accounts = can(ctx, "rider.settle") ? await getRiderAccounts(ctx) : [];
+  const canPay = can(ctx, "staff.manage");
 
   return (
     <div className="space-y-8">

@@ -7,7 +7,7 @@ import { describeAction, detailText } from "../activity";
 
 /** Everything people did in the business (every audited change), for the owner. Newest first, at most 300. */
 export async function getActivity(ctx: TenantContext, f: { from: string; to: string; userId?: string; search?: string }) {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can see the activity log.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can see the activity log.");
   const biz = await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { timezone: true } });
   const { start } = dayRange(f.from, biz.timezone);
   const { end } = dayRange(f.to, biz.timezone);

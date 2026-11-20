@@ -38,7 +38,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   }
   const { date, today, report, dayClose, closedByName, openOrders } = data;
   const isFuture = date > today;
-  const canClose = can(ctx.role, "day.close") && !dayClose && !isFuture;
+  const canClose = can(ctx, "day.close") && !dayClose && !isFuture;
   const multiBranch = (await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { multiBranch: true } })).multiBranch;
 
   return (
@@ -236,7 +236,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
               </dd>
             </dl>
             {dayClose.note && <p className="text-stone-600">Note: {dayClose.note}</p>}
-            {can(ctx.role, "day.reopen") && (
+            {can(ctx, "day.reopen") && (
               <details>
                 <summary className="cursor-pointer text-sm font-medium text-red-700">Reopen this day</summary>
                 <form action={reopenDayAction.bind(null, date)} className="mt-2 rounded-lg bg-red-50 p-3 text-sm">

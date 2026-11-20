@@ -15,7 +15,7 @@ import { cardState, countStamps, qualifies, type CardState, type ProgramItemDef 
 type Client = Pick<Tx, "stampProgram" | "stampRedemption" | "orderItem" | "menuItem" | "creditNote">;
 
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "campaign.manage")) throw new DomainError("You do not have permission to change stamp cards.");
+  if (!can(ctx, "campaign.manage")) throw new DomainError("You do not have permission to change stamp cards.");
 }
 
 export interface ProgramStatus {
@@ -52,7 +52,7 @@ export async function stampStatus(client: Client, businessId: string, customerId
 
 /** For an order's bill screen: the customer's cards, and which dishes on the order could be the free one. Needs a confirmed customer. */
 export async function getStampOptions(ctx: TenantContext, orderId: string) {
-  if (!can(ctx.role, "customer.use")) return null;
+  if (!can(ctx, "customer.use")) return null;
   const { businessId, branchId } = scope(ctx);
   const order = await db.order.findFirst({
     where: { id: orderId, businessId, branchId },

@@ -17,10 +17,10 @@ import { validateSettings, type LoyaltySettings } from "@/features/loyalty/point
  */
 
 function needUse(ctx: TenantContext) {
-  if (!can(ctx.role, "customer.use")) throw new DomainError("You do not have permission to use customer details.");
+  if (!can(ctx, "customer.use")) throw new DomainError("You do not have permission to use customer details.");
 }
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "customer.manage")) throw new DomainError("You do not have permission to manage customers.");
+  if (!can(ctx, "customer.manage")) throw new DomainError("You do not have permission to manage customers.");
 }
 
 function cleanName(value: string | undefined | null): string | null {

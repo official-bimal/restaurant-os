@@ -14,7 +14,7 @@ export default async function CashBanksPage({ searchParams }: PageProps<"/accoun
   const p = await currentPeriod(ctx);
   const { from, to } = pickRange(sp, { from: p.today, to: p.today });
   const [accounts, book] = await Promise.all([listMoneyAccounts(ctx), getCashBook(ctx, from, to)]);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   const total = accounts.filter((a) => a.active).reduce((n, a) => n + a.balance, 0);
   const cols = book.accounts;
 

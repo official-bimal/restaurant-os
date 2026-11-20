@@ -4,6 +4,9 @@ import { listBranches } from "@/features/branches/server/service";
 import { setStaffBranchesAction } from "../branches/actions";
 import { listStaff, ROLES } from "@/features/staff/server/service";
 import { changeRoleAction, removeStaffAction } from "./actions";
+import { roleChoices } from "@/features/staff/server/roles";
+import { assignRoleAction } from "./roles/actions";
+import Link from "next/link";
 import { CreateStaffForm, ResetPasswordButton } from "./secret-box";
 
 export const dynamic = "force-dynamic";
@@ -23,13 +26,22 @@ export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
   const ctx = await requireTenant("staff.manage");
   const { error } = await searchParams;
   const staff = await listStaff(ctx);
-  const canBranches = can(ctx.role, "branch.manage");
+  const customRoles = await roleChoices(ctx);
+  const owner = can(ctx, "owner.control");
+  const canBranches = can(ctx, "branch.manage");
   const branches = canBranches ? (await listBranches(ctx)).filter((b) => b.active) : [];
   const assignable = ROLES.filter((r) => canManageRole(ctx.role, r)).map((r) => ({ value: r, label: LABEL[r] }));
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Staff</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Staff</h1>
+        {owner && (
+          <Link href="/staff/roles" className="btn-secondary">
+            Roles
+          </Link>
+        )}
+      </div>
 
       {typeof error === "string" && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
@@ -52,6 +64,7 @@ export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
                     {m.user.name} {self && <span className="text-xs font-normal text-stone-500">(you)</span>}
                   </p>
                   <p className="text-sm text-stone-500">{m.user.email}</p>
+                  {m.customRole && <p className="text-xs font-medium text-brand-700">Role: {m.customRole.name}</p>}
                   {branches.length > 1 && (
                     <p className="text-xs text-stone-500">
                       Branches:{" "}
@@ -82,6 +95,19 @@ export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
                       </select>
                       <button className={smallBtn}>Save role</button>
                     </form>
+                    {owner && m.role !== "OWNER" && customRoles.length > 0 && (
+                      <form action={assignRoleAction.bind(null, m.id)} className="flex items-center gap-2">
+                        <select name="customRole" defaultValue={m.customRole?.id ?? ""} aria-label={`Custom role for ${m.user.name}`} className="rounded-lg border border-stone-300 px-2 py-2 text-sm">
+                          <option value="">No custom role</option>
+                          {customRoles.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button className={smallBtn}>Save</button>
+                      </form>
+                    )}
                     <ResetPasswordButton membershipId={m.id} name={m.user.name} />
                     {canBranches && branches.length > 1 && (
                       <details>

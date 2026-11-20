@@ -14,7 +14,7 @@ import { billDates, copyNote, invoiceLabel } from "@/features/billing/ird";
  */
 
 function needBills(ctx: TenantContext) {
-  if (!can(ctx.role, "bills.view") && !can(ctx.role, "bill.checkout")) throw new DomainError("You do not have permission to print bills.");
+  if (!can(ctx, "bills.view") && !can(ctx, "bill.checkout")) throw new DomainError("You do not have permission to print bills.");
 }
 
 async function header(businessId: string, branchId: string) {
@@ -87,7 +87,7 @@ export async function getCreditNote(ctx: TenantContext, creditNoteId: string) {
 
 /** What the kitchen needs to cook for an order: its live items by station, with notes and add-ons. */
 export async function getKitchenSlip(ctx: TenantContext, orderId: string, opts: { onlyUnprinted?: boolean } = {}) {
-  if (!can(ctx.role, "order.edit") && !can(ctx.role, "kitchen.update")) throw new DomainError("You do not have permission to print kitchen tickets.");
+  if (!can(ctx, "order.edit") && !can(ctx, "kitchen.update")) throw new DomainError("You do not have permission to print kitchen tickets.");
   const { businessId, branchId } = scope(ctx);
   const order = await db.order.findFirst({
     where: { id: orderId, businessId, branchId },

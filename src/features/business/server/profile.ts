@@ -7,7 +7,7 @@ import { detectImageType } from "@/features/menu/image";
 import { cleanProfile, MAX_LOGO_BYTES, type ProfileInput } from "../profile";
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can change the business profile.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can change the business profile.");
 }
 
 export async function getProfile(ctx: TenantContext) {

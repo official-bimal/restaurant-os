@@ -59,6 +59,7 @@ export async function listStaff(ctx: TenantContext) {
     include: {
       user: { select: { id: true, name: true, email: true, mustChangePassword: true } },
       branches: { select: { branchId: true } },
+      customRole: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -91,7 +92,7 @@ export async function changeRole(ctx: TenantContext, membershipId: string, newRo
   needManage(ctx, newRole);
   if (m.role === "OWNER" && newRole !== "OWNER") await assertNotLastOwner(ctx.businessId, m.id);
   await db.$transaction(async (tx) => {
-    await tx.membership.update({ where: { id: m.id }, data: { role: newRole } });
+    await tx.membership.update({ where: { id: m.id }, data: { role: newRole, customRoleId: null } });
     await audit(tx, ctx, "staff.role", "Membership", m.id, { email: m.user.email, from: m.role, to: newRole });
   });
 }

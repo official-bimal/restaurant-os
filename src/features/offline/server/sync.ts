@@ -37,7 +37,7 @@ class Refuse extends Error {
 }
 
 export async function syncOfflineBill(ctx: TenantContext, input: { snapshot: string; sig: string; bill: OfflineBillInput }, now: Date = new Date()): Promise<SyncResult> {
-  if (!can(ctx.role, "bill.checkout") || !can(ctx.role, "order.create")) throw new DomainError("You do not have permission to bill.");
+  if (!can(ctx, "bill.checkout") || !can(ctx, "order.create")) throw new DomainError("You do not have permission to bill.");
   const bill = input.bill;
   try {
     const snap = verifySnapshot(input.snapshot, input.sig, ctx, now);

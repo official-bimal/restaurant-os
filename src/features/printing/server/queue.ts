@@ -20,7 +20,7 @@ const MAX_ATTEMPTS = 5;
 const RECLAIM_MS = 2 * 60 * 1000;
 
 function needPrint(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit") && !can(ctx.role, "bills.view") && !can(ctx.role, "kitchen.update") && !can(ctx.role, "bill.checkout")) {
+  if (!can(ctx, "order.edit") && !can(ctx, "bills.view") && !can(ctx, "kitchen.update") && !can(ctx, "bill.checkout")) {
     throw new DomainError("You do not have permission to print.");
   }
 }
@@ -73,13 +73,13 @@ export async function queueDocument(ctx: TenantContext, kind: DocKind, id: strin
 // --- looking at the queue ----------------------------------------------------------------
 
 export async function listJobs(ctx: TenantContext) {
-  if (!can(ctx.role, "print.manage")) throw new DomainError("You do not have permission to see the print queue.");
+  if (!can(ctx, "print.manage")) throw new DomainError("You do not have permission to see the print queue.");
   const { businessId, branchId } = scope(ctx);
   return db.printJob.findMany({ where: { businessId, branchId }, orderBy: { createdAt: "desc" }, take: 30 });
 }
 
 export async function cancelJob(ctx: TenantContext, jobId: string) {
-  if (!can(ctx.role, "print.manage")) throw new DomainError("You do not have permission to change the print queue.");
+  if (!can(ctx, "print.manage")) throw new DomainError("You do not have permission to change the print queue.");
   const { businessId, branchId } = scope(ctx);
   const r = await db.printJob.updateMany({ where: { id: jobId, businessId, branchId, status: { in: ["QUEUED", "FAILED"] } }, data: { status: "CANCELLED" } });
   if (r.count === 0) throw new DomainError("That job cannot be cancelled any more.");
@@ -87,7 +87,7 @@ export async function cancelJob(ctx: TenantContext, jobId: string) {
 }
 
 export async function retryJob(ctx: TenantContext, jobId: string) {
-  if (!can(ctx.role, "print.manage")) throw new DomainError("You do not have permission to change the print queue.");
+  if (!can(ctx, "print.manage")) throw new DomainError("You do not have permission to change the print queue.");
   const { businessId, branchId } = scope(ctx);
   const r = await db.printJob.updateMany({ where: { id: jobId, businessId, branchId, status: "FAILED" }, data: { status: "QUEUED", attempts: 0, error: null, claimedAt: null } });
   if (r.count === 0) throw new DomainError("Only a failed job can be tried again.");

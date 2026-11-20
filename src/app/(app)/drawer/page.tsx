@@ -15,7 +15,7 @@ export default async function DrawerPage({ searchParams }: PageProps<"/drawer">)
   const ctx = await requireTenant();
   const sp = await searchParams;
   const d = await getDrawer(ctx);
-  const use = can(ctx.role, "drawer.use");
+  const use = can(ctx, "drawer.use");
   const c = d.current;
   return (
     <div className="space-y-5">

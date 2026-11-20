@@ -13,7 +13,7 @@ import { toBs } from "../fiscal";
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
+  if (!can(ctx, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
 }
 
 function check(from: string, to: string) {

@@ -18,7 +18,7 @@ const METHODS = ["CASH", "BANK", "QR", "CHEQUE", "OTHER"] as const;
 export type PayMethod = (typeof METHODS)[number];
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "supplier.pay")) throw new DomainError("You do not have permission to handle supplier bills.");
+  if (!can(ctx, "supplier.pay")) throw new DomainError("You do not have permission to handle supplier bills.");
 }
 
 function cleanText(value: string | undefined | null, max: number): string | null {

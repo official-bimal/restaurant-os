@@ -182,7 +182,7 @@ export default async function StockValuePage({ searchParams }: PageProps<"/stock
           </table>
         )}
       </section>
-      {can(ctx.role, "books.manage") && (
+      {can(ctx, "books.manage") && (
         <section className="card p-4">
           <h2 className="font-semibold">Update the books</h2>
           <p className="mt-1 text-sm text-stone-600">

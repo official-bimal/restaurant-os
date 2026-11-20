@@ -215,6 +215,7 @@ model Business {
   invoices         Invoice[]
   stations         Station[]
   auditEvents      AuditEvent[]
+  customRoles      CustomRole[]
   logo             BusinessLogo?
   trash            TrashItem[]
   tableSessions    TableSession[]
@@ -266,6 +267,8 @@ model Membership {
   userId               String
   businessId           String
   role                 Role
+  /// A role the owner made (Staff, Roles). When set, its ticked permissions replace the ones `role` would give; `role` is then the type it is based on.
+  customRoleId         String?
   /// True: works in every branch (owners and managers). False: only the branches listed.
   allBranches          Boolean  @default(true)
   /// For riders: what they are paid for each completed delivery, in paisa.
@@ -283,6 +286,7 @@ model Membership {
   user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   business Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
   branches MembershipBranch[]
+  customRole CustomRole?        @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   @@unique([userId, businessId])
   @@index([businessId])
@@ -2619,4 +2623,22 @@ model TrashItem {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, deletedAt])
+}
+
+/// A role the owner defines: a name, a colour and a set of ticked permissions. Based on one of the built-in roles for the
+/// screens that depend on the kind of role (kitchen screen, rider page, accountant view).
+model CustomRole {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  color       String   @default("indigo")
+  baseRole    Role     @default(WAITER)
+  permissions String[]
+  createdAt   DateTime @default(now())
+
+  business Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  members  Membership[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
 }

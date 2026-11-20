@@ -15,7 +15,7 @@ import { syncOrderStatus } from "./sync";
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "order.restructure")) throw new DomainError("You do not have permission to move, merge or split bills.");
+  if (!can(ctx, "order.restructure")) throw new DomainError("You do not have permission to move, merge or split bills.");
 }
 
 const OPEN = ["OPEN", "SERVED"] as const;

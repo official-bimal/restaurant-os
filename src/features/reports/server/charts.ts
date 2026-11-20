@@ -11,7 +11,7 @@ import { dayBuckets, hourBuckets, methodSlices, weekOverWeek, type MoneyEvent } 
  * last 7 days against the 7 before. Sales are bills paid less credit notes, at the time each was made. Owners and managers.
  */
 export async function getDashboardCharts(ctx: TenantContext) {
-  if (!can(ctx.role, "report.view")) throw new DomainError("You do not have permission to see reports.");
+  if (!can(ctx, "report.view")) throw new DomainError("You do not have permission to see reports.");
   const { businessId, branchId } = scope(ctx);
   const biz = await db.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
   const tz = biz.timezone;

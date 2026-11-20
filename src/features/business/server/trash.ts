@@ -27,7 +27,7 @@ export async function keepDeletedDish(tx: Tx, ctx: TenantContext, dishId: string
 }
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to use the Trash.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to use the Trash.");
 }
 
 /** What is in the Trash, newest first. Anything older than the keeping time is removed first. */

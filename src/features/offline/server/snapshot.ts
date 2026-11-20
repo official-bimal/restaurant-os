@@ -31,7 +31,7 @@ export interface SignedSnapshot {
 }
 
 export async function makeSnapshot(ctx: TenantContext, now: Date = new Date()): Promise<SignedSnapshot> {
-  if (!can(ctx.role, "order.create")) throw new DomainError("You do not have permission to take orders.");
+  if (!can(ctx, "order.create")) throw new DomainError("You do not have permission to take orders.");
   const [business, branch, menu, tables, rules] = await Promise.all([
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId } }),
     db.branch.findUniqueOrThrow({ where: { businessId_id: { businessId: ctx.businessId, id: ctx.branchId } }, select: { name: true, address: true } }),

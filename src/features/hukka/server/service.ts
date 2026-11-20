@@ -14,7 +14,7 @@ import { isCoilDish, isHukkaCategory } from "../hukka";
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit")) throw new DomainError("You do not have permission to handle orders.");
+  if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to handle orders.");
 }
 
 const DEFAULT_ALERT = 60;
@@ -100,7 +100,7 @@ export async function finishHukka(ctx: TenantContext, sessionId: string) {
 
 /** How many hukkas are running, and how many of them are past their alert time (for a badge). */
 export async function hukkaAlertCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "order.edit") || !ctx.branchId) return 0;
+  if (!can(ctx, "order.edit") || !ctx.branchId) return 0;
   const rows = await db.hukkaSession.findMany({ where: { businessId: ctx.businessId, branchId: ctx.branchId, endedAt: null }, select: { startedAt: true, alertMinutes: true } });
   const now = Date.now();
   return rows.filter((r) => (now - r.startedAt.getTime()) / 60_000 >= r.alertMinutes).length;
@@ -108,7 +108,7 @@ export async function hukkaAlertCount(ctx: TenantContext): Promise<number> {
 
 /** The hukkas running now, for the kitchen or bar screen. Kitchen staff may see them as well as people who handle orders. */
 export async function listRunningHukkas(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit") && !can(ctx.role, "kitchen.update")) throw new DomainError("You do not have permission to see hukkas.");
+  if (!can(ctx, "order.edit") && !can(ctx, "kitchen.update")) throw new DomainError("You do not have permission to see hukkas.");
   const { businessId, branchId } = scope(ctx);
   await closeFinished(businessId, branchId);
   return db.hukkaSession.findMany({ where: { businessId, branchId, endedAt: null }, orderBy: { startedAt: "asc" }, select: { id: true, name: true, tableLabel: true, startedAt: true, alertMinutes: true, coils: true } });

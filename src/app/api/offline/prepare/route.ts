@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   if (!body.success) return NextResponse.json({ error: "Bad request." }, { status: 400 });
   try {
     const snap = await makeSnapshot(ctx);
-    const canBill = can(ctx.role, "bill.checkout");
+    const canBill = can(ctx, "bill.checkout");
     const numbers = canBill ? await prepareDeviceBlocks(ctx, body.data.deviceId) : { blocks: [], used: [] };
     // The receipt layout comes along so a bill can be printed on the phone with no connection.
     const print = await getPrintConfig(ctx.businessId);

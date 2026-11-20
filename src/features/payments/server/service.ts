@@ -35,10 +35,10 @@ const realFetch: FetchLike = (url, init) => fetch(url, init) as unknown as Retur
 const INTENT_MINUTES = 30;
 
 function needBill(ctx: TenantContext) {
-  if (!can(ctx.role, "bill.checkout")) throw new DomainError("You do not have permission to take payments.");
+  if (!can(ctx, "bill.checkout")) throw new DomainError("You do not have permission to take payments.");
 }
 function needSetup(ctx: TenantContext) {
-  if (!can(ctx.role, "owner.control") && !can(ctx.role, "branch.manage")) throw new DomainError("Only the owner can set up payment services.");
+  if (!can(ctx, "owner.control") && !can(ctx, "branch.manage")) throw new DomainError("Only the owner can set up payment services.");
 }
 
 // ---------------------------------------------------------------------------------------------------

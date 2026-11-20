@@ -13,7 +13,7 @@ export default async function YearEndPage({ searchParams }: PageProps<"/accounti
   const sp = await searchParams;
   const p = await currentPeriod(ctx);
   const closed = await listClosedYears(ctx);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   // The year that just ended, the one most people close.
   const justEnded = fiscalYearOf(new Date(Date.parse(`${p.from}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10));
   const range = fiscalYearRange(justEnded);

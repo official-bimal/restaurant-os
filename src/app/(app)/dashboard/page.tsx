@@ -35,7 +35,7 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
 
 export default async function DashboardPage() {
   const ctx = await requireTenant();
-  const showMoney = can(ctx.role, "report.view");
+  const showMoney = can(ctx, "report.view");
 
   const [business, user, branch, orders, tables, guestWaiting, lowRatings, lowStock, onlineWaiting, reservationsWaiting, hukkaLong, hukkaCategories, ownerAlerts, day] = await Promise.all([
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { name: true, timezone: true, multiBranch: true } }),
@@ -44,17 +44,17 @@ export default async function DashboardPage() {
     listOpenOrders(ctx),
     listTables(ctx),
     inboxCount(ctx),
-    can(ctx.role, "feedback.view") ? unresolvedCount(ctx) : 0,
-    can(ctx.role, "stock.view") ? lowStockCount(ctx) : 0,
-    can(ctx.role, "order.edit") ? onlineInboxCount(ctx) : 0,
+    can(ctx, "feedback.view") ? unresolvedCount(ctx) : 0,
+    can(ctx, "stock.view") ? lowStockCount(ctx) : 0,
+    can(ctx, "order.edit") ? onlineInboxCount(ctx) : 0,
     reservationsWaitingCount(ctx),
     hukkaAlertCount(ctx),
     db.menuCategory.count({ where: { businessId: ctx.businessId, OR: [{ name: { contains: "hukka", mode: "insensitive" } }, { name: { contains: "shisha", mode: "insensitive" } }, { name: { contains: "hookah", mode: "insensitive" } }] } }),
-    can(ctx.role, "owner.control") ? unseenAlertCount(ctx) : 0,
+    can(ctx, "owner.control") ? unseenAlertCount(ctx) : 0,
     showMoney ? getDayReport(ctx) : null,
   ]);
   const charts = showMoney ? await getDashboardCharts(ctx) : null;
-  const attendance = can(ctx.role, "time.manage") ? await getAttendance(ctx, localDate(new Date(), business.timezone)) : null;
+  const attendance = can(ctx, "time.manage") ? await getAttendance(ctx, localDate(new Date(), business.timezone)) : null;
 
   const occupied = new Set(orders.map((o) => o.tableId).filter(Boolean)).size;
   const occupancy = tables.length ? Math.round((occupied / tables.length) * 100) : 0;
@@ -64,6 +64,7 @@ export default async function DashboardPage() {
 
   const { sections } = buildNav({
     role: ctx.role,
+    permissions: ctx.permissions,
     multiBranch: business.multiBranch,
     hukka: hukkaCategories > 0,
     counts: { guestWaiting, onlineWaiting, reservationsWaiting, hukkaLong, lowStock, lowRatings, ownerAlerts },
@@ -95,17 +96,17 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {can(ctx.role, "order.create") && (
+          {can(ctx, "order.create") && (
             <Link href="/orders" className="btn-primary">
               <Icon name="plus" className="size-4" /> New order
             </Link>
           )}
-          {can(ctx.role, "order.create") && can(ctx.role, "order.edit") && (
+          {can(ctx, "order.create") && can(ctx, "order.edit") && (
             <Link href="/quick" className="btn-secondary">
               Quick order
             </Link>
           )}
-          {(can(ctx.role, "kitchen.update") || can(ctx.role, "order.edit")) && (
+          {(can(ctx, "kitchen.update") || can(ctx, "order.edit")) && (
             <Link href="/kitchen" className="btn-secondary">
               Kitchen
             </Link>

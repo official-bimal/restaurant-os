@@ -35,7 +35,7 @@ export async function listNotifications(ctx: TenantContext): Promise<AppNotifica
   const { businessId, branchId } = scope(ctx);
 
   // Who clocked in or out lately (owner and managers), so it shows with the other alerts for the next half day.
-  if (can(ctx.role, "time.manage")) {
+  if (can(ctx, "time.manage")) {
     const since = new Date(Date.now() - 12 * 60 * 60 * 1000);
     const [ins, outs] = await Promise.all([
       db.timeEntry.findMany({ where: { businessId, branchId, source: "CLOCK", clockIn: { gte: since } }, include: { user: { select: { name: true } } }, orderBy: { clockIn: "desc" }, take: 20 }),
@@ -45,7 +45,7 @@ export async function listNotifications(ctx: TenantContext): Promise<AppNotifica
     for (const e of outs) out.push({ id: `clk-out-${e.id}`, kind: "CLOCK", level: e.outAway ? "warn" : "info", title: `${e.user.name} clocked out`, detail: e.outAway ? `Clocked out ${e.outDistanceM} m away from the cafe` : "Tap to see today's attendance", href: "/attendance", at: e.clockOut! });
   }
 
-  if (can(ctx.role, "order.edit")) {
+  if (can(ctx, "order.edit")) {
     const [subs, reqs] = await Promise.all([
       db.guestSubmission.findMany({
         where: { businessId, status: "PENDING", table: { branchId } },
@@ -103,7 +103,7 @@ export async function listNotifications(ctx: TenantContext): Promise<AppNotifica
     }
   }
 
-  if (can(ctx.role, "stock.view")) {
+  if (can(ctx, "stock.view")) {
     const levels = await db.branchStock.findMany({
       where: { businessId, branchId, active: true, stockItem: { active: true } },
       include: { stockItem: true },
@@ -131,7 +131,7 @@ export async function listNotifications(ctx: TenantContext): Promise<AppNotifica
   }
 
   // Stock sent to this branch that has not been booked in yet.
-  if (can(ctx.role, "stock.manage")) {
+  if (can(ctx, "stock.manage")) {
     const incoming = await db.stockTransfer.findMany({
       where: { businessId, toBranchId: branchId, status: "IN_TRANSIT" },
       include: { stockItem: { select: { name: true, unit: true } }, from: { select: { name: true } } },
@@ -150,7 +150,7 @@ export async function listNotifications(ctx: TenantContext): Promise<AppNotifica
     }
   }
 
-  if (can(ctx.role, "feedback.view")) {
+  if (can(ctx, "feedback.view")) {
     const low = await db.feedback.findMany({
       where: { businessId, rating: { lte: LOW_RATING_MAX }, handledAt: null },
       orderBy: { createdAt: "desc" },

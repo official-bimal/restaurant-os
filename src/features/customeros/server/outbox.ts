@@ -228,7 +228,7 @@ export async function drainBackgroundSends(): Promise<void> {
 
 /** Failed events go back in the queue (the owner pressed "Try again"). */
 export async function retryFailed(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can do that.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can do that.");
   const r = await db.customerOsEvent.updateMany({
     where: { businessId: ctx.businessId, status: "FAILED" },
     data: { status: "PENDING", attempts: 0, nextAttemptAt: new Date(), lastError: null },

@@ -28,7 +28,7 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
   const date = typeof sp.date === "string" && isValidDate(sp.date) ? sp.date : today;
   const { rows, tables, enabled, publicToken, businessName } = await listReservations(ctx, date);
   const tableLabel = new Map(tables.map((t) => [t.id, t.label]));
-  const owner = can(ctx.role, "branch.manage");
+  const owner = can(ctx, "branch.manage");
   return (
     <div className="space-y-4">
       <AutoRefresh />

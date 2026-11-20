@@ -16,7 +16,7 @@ const MAX_PAISA = 100_000_000_00;
 const KINDS: readonly AdjustKind[] = ["ALLOWANCE", "BONUS", "ADVANCE", "DEDUCTION"];
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "payroll.manage")) throw new DomainError("Only the owner can handle payroll.");
+  if (!can(ctx, "payroll.manage")) throw new DomainError("Only the owner can handle payroll.");
 }
 
 async function bounds(businessId: string, period: string) {

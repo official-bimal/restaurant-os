@@ -17,7 +17,7 @@ import { difference, expectedCash, isMoneyIn, MOVE_KINDS, type MoveKind } from "
 const MAX = 100_000_000_000;
 
 function needUse(ctx: TenantContext) {
-  if (!can(ctx.role, "drawer.use")) throw new DomainError("You do not have permission to use the cash drawer.");
+  if (!can(ctx, "drawer.use")) throw new DomainError("You do not have permission to use the cash drawer.");
 }
 
 async function flows(businessId: string, branchId: string, from: Date, to: Date, shiftId: string, openingFloat: number) {
@@ -32,17 +32,17 @@ async function flows(businessId: string, branchId: string, from: Date, to: Date,
 }
 
 export async function getDrawer(ctx: TenantContext) {
-  if (!can(ctx.role, "drawer.use") && !can(ctx.role, "drawer.review")) throw new DomainError("You do not have permission to see the cash drawer.");
+  if (!can(ctx, "drawer.use") && !can(ctx, "drawer.review")) throw new DomainError("You do not have permission to see the cash drawer.");
   const { businessId, branchId } = scope(ctx);
   const open = await db.cashShift.findFirst({ where: { businessId, branchId, closedAt: null } });
   const last = await db.cashShift.findFirst({ where: { businessId, branchId, closedAt: { not: null } }, orderBy: { closedAt: "desc" }, select: { countedCash: true } });
   const names = async (ids: (string | null)[]) => new Map((await db.user.findMany({ where: { id: { in: ids.filter(Boolean) as string[] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
   const current = open ? { shift: open, ...(await flows(businessId, branchId, open.openedAt, new Date(), open.id, open.openingFloat)) } : null;
-  const history = can(ctx.role, "drawer.review")
+  const history = can(ctx, "drawer.review")
     ? await db.cashShift.findMany({ where: { businessId, branchId, closedAt: { not: null } }, orderBy: { closedAt: "desc" }, take: 30 })
     : [];
   const who = await names([open?.openedById ?? null, ...history.flatMap((h) => [h.openedById, h.closedById]), ...(current?.movements.map((m) => m.createdById) ?? [])]);
-  return { current, history, lastCounted: last?.countedCash ?? null, who: Object.fromEntries(who), canReview: can(ctx.role, "drawer.review") };
+  return { current, history, lastCounted: last?.countedCash ?? null, who: Object.fromEntries(who), canReview: can(ctx, "drawer.review") };
 }
 
 export async function openShift(ctx: TenantContext, openingFloat: number) {

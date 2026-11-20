@@ -22,7 +22,7 @@ export default async function ReconcilePage({ searchParams }: PageProps<"/accoun
   const to = typeof sp.to === "string" && isValidDate(sp.to) ? sp.to : p.today;
   const rec = chosen ? await getReconciliation(ctx, chosen.id, to) : null;
   const statement = toPaisa(sp.balance);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Bank reconciliation</h1>

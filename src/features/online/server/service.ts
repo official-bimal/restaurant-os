@@ -319,7 +319,7 @@ export async function cancelOnlineOrder(token: string, trackingToken: string): P
 // ---------- staff ----------
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit")) throw new DomainError("You do not have permission to handle online orders.");
+  if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to handle online orders.");
 }
 
 export async function getOnlineInbox(ctx: TenantContext) {
@@ -336,7 +336,7 @@ export async function getOnlineInbox(ctx: TenantContext) {
 }
 
 export async function onlineInboxCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "order.edit") || !ctx.branchId) return 0;
+  if (!can(ctx, "order.edit") || !ctx.branchId) return 0;
   return db.onlineOrder.count({ where: { businessId: ctx.businessId, branchId: ctx.branchId, status: "PENDING" } });
 }
 
@@ -450,7 +450,7 @@ export async function expireStaleOnlineOrders(now = new Date()): Promise<number>
 // ---------- settings (owner and managers) ----------
 
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "branch.manage")) throw new DomainError("Only the owner can change online ordering settings.");
+  if (!can(ctx, "branch.manage")) throw new DomainError("Only the owner can change online ordering settings.");
 }
 
 export async function getOnlineSettings(ctx: TenantContext) {
@@ -460,7 +460,7 @@ export async function getOnlineSettings(ctx: TenantContext) {
   return {
     name: b.name,
     enabled: b.onlineEnabled,
-    token: can(ctx.role, "branch.manage") ? b.onlineToken : null,
+    token: can(ctx, "branch.manage") ? b.onlineToken : null,
     pickup: b.onlinePickup,
     delivery: b.onlineDelivery,
     minOrder: b.onlineMinOrder,

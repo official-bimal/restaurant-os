@@ -22,7 +22,7 @@ export default async function RosterPage({ searchParams }: PageProps<"/roster">)
   const error = typeof sp.error === "string" ? sp.error : null;
 
   // Everyone can see their own shifts; managers see and change the whole week.
-  if (!can(ctx.role, "time.manage")) {
+  if (!can(ctx, "time.manage")) {
     const mine = await myShifts(ctx, today, 14);
     return (
       <div className="space-y-4">

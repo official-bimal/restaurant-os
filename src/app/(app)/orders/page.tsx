@@ -48,7 +48,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
   return (
     <div className="space-y-6">
       <AutoRefresh />
-      {can(ctx.role, "order.edit") && <GuestInbox ctx={ctx} />}
+      {can(ctx, "order.edit") && <GuestInbox ctx={ctx} />}
       {typeof error === "string" && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
           {error}
@@ -58,11 +58,11 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
       {tables.length > 0 && (
         <section aria-label="Tables" className="card p-4">
           <h2 className="mb-3 text-lg font-semibold">Tables</h2>
-          <TableMap areas={areas} keyBase={idempotencyKey} canCreate={can(ctx.role, "order.create")} />
+          <TableMap areas={areas} keyBase={idempotencyKey} canCreate={can(ctx, "order.create")} />
         </section>
       )}
 
-      {can(ctx.role, "order.create") && (
+      {can(ctx, "order.create") && (
         <form action={createOrderAction} className="group card space-y-4 p-4">
           <h2 className="text-lg font-semibold">Takeaway or delivery</h2>
           <input type="hidden" name="idempotencyKey" value={idempotencyKey} />

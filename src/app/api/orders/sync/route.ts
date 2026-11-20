@@ -8,7 +8,7 @@ import { applyOfflineOrder } from "@/features/orders/server/offline-sync";
 export async function POST(request: NextRequest) {
   const ctx = await getTenant();
   if (!ctx) return NextResponse.json({ ok: false, retry: false, error: "Please sign in again, then send the saved orders." }, { status: 401 });
-  if (!can(ctx.role, "order.create") || !can(ctx.role, "order.edit")) {
+  if (!can(ctx, "order.create") || !can(ctx, "order.edit")) {
     return NextResponse.json({ ok: false, retry: false, error: "You do not have permission to take orders." }, { status: 403 });
   }
   const body = offlineOrderSchema.safeParse(await request.json().catch(() => null));

@@ -18,7 +18,7 @@ export default async function TimePage({ searchParams }: PageProps<"/time">) {
   const tz = business.timezone;
   const thisMonth = localDate(new Date(), tz).slice(0, 7);
   const period = typeof q.period === "string" && isPeriod(q.period) ? q.period : thisMonth;
-  const manage = can(ctx.role, "time.manage");
+  const manage = can(ctx, "time.manage");
   const team = manage ? await listTeam(ctx) : [];
   const requested = typeof q.user === "string" && q.user ? q.user : ctx.userId;
   const userId = manage && team.some((t) => t.userId === requested) ? requested : ctx.userId;

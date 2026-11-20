@@ -15,7 +15,7 @@ import { analyse, foodCostPercent, withoutVat, type DishSale } from "@/features/
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "stock.manage") || !can(ctx.role, "report.view")) throw new DomainError("You do not have permission to see food cost.");
+  if (!can(ctx, "stock.manage") || !can(ctx, "report.view")) throw new DomainError("You do not have permission to see food cost.");
 }
 
 export async function getFoodCostReport(ctx: TenantContext, range: { from?: string; to?: string } = {}) {

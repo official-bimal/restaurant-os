@@ -17,7 +17,7 @@ import { bookingProblem, canMove, clash, confirmationText, declineText, type Res
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit")) throw new DomainError("You do not have permission to handle reservations.");
+  if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to handle reservations.");
 }
 
 function nowIn(timezone: string) {
@@ -97,7 +97,7 @@ export async function listReservations(ctx: TenantContext, date: string) {
 }
 
 export async function reservationsWaitingCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "order.edit") || !ctx.branchId) return 0;
+  if (!can(ctx, "order.edit") || !ctx.branchId) return 0;
   const biz = await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { timezone: true } });
   return db.reservation.count({ where: { businessId: ctx.businessId, branchId: ctx.branchId, status: "REQUESTED", date: { gte: localDate(new Date(), biz.timezone) } } });
 }
@@ -167,7 +167,7 @@ export async function setReservationStatus(ctx: TenantContext, id: string, to: R
 }
 
 export async function setReservationsEnabled(ctx: TenantContext, enabled: boolean) {
-  if (!can(ctx.role, "branch.manage")) throw new DomainError("Only the owner can turn reservations on or off.");
+  if (!can(ctx, "branch.manage")) throw new DomainError("Only the owner can turn reservations on or off.");
   const { businessId, branchId } = scope(ctx);
   await db.$transaction(async (tx) => {
     const b = await tx.branch.findFirst({ where: { id: branchId, businessId } });

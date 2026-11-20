@@ -14,7 +14,7 @@ import { buildReport, combineReports, type DayReport, type Method } from "@/feat
  */
 
 function needView(ctx: TenantContext) {
-  if (!can(ctx.role, "report.view")) throw new DomainError("You do not have permission to see reports.");
+  if (!can(ctx, "report.view")) throw new DomainError("You do not have permission to see reports.");
 }
 
 function checkDate(date: string) {
@@ -131,7 +131,7 @@ export async function getDayReport(ctx: TenantContext, requestedDate?: string) {
 }
 
 export async function closeDay(ctx: TenantContext, input: { date: string; countedCash: number; note?: string }) {
-  if (!can(ctx.role, "day.close")) throw new DomainError("You do not have permission to close the day.");
+  if (!can(ctx, "day.close")) throw new DomainError("You do not have permission to close the day.");
   checkDate(input.date);
   if (!Number.isInteger(input.countedCash) || input.countedCash < 0 || input.countedCash > 100_000_000_00) {
     throw new DomainError("Enter the cash you counted, as an amount of Rs 0 or more.");
@@ -176,7 +176,7 @@ export async function closeDay(ctx: TenantContext, input: { date: string; counte
 
 /** Owner only: unlock a closed day (to fix a mistake or take a late payment). The old count is kept in the audit log. */
 export async function reopenDay(ctx: TenantContext, date: string) {
-  if (!can(ctx.role, "day.reopen")) throw new DomainError("Only the owner can reopen a closed day.");
+  if (!can(ctx, "day.reopen")) throw new DomainError("Only the owner can reopen a closed day.");
   checkDate(date);
   const { branchId } = scope(ctx);
   await db.$transaction(async (tx) => {

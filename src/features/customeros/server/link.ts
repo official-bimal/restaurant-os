@@ -12,7 +12,7 @@ import { cleanBaseUrl, cosPing, type CosTarget, type FetchLike } from "../client
  */
 
 const need = (ctx: TenantContext) => {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can connect Customer OS.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can connect Customer OS.");
 };
 
 export interface LinkStatus {

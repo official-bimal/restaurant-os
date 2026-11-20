@@ -13,7 +13,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/accountin
   const p = await currentPeriod(ctx);
   const fy = typeof sp.fy === "string" && /^\d{4}\/\d{2}$/.test(sp.fy) ? sp.fy : p.fiscalYear;
   const rows = await getBudgetReport(ctx, fy);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   const shown = rows.filter((r) => manage || r.budget !== 0 || r.actual !== 0);
   const tot = (type: "INCOME" | "EXPENSE") => rows.filter((r) => r.account.type === type).reduce((n, r) => ({ budget: n.budget + r.budget, actual: n.actual + r.actual }), { budget: 0, actual: 0 });
   return (

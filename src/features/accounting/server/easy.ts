@@ -15,10 +15,10 @@ import { createVoucher, ensureChart, syncPostings } from "./service";
  */
 
 function needView(ctx: TenantContext) {
-  if (!can(ctx.role, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
+  if (!can(ctx, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
 }
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "books.manage")) throw new DomainError("Only the owner can change the accounts.");
+  if (!can(ctx, "books.manage")) throw new DomainError("Only the owner can change the accounts.");
 }
 
 // ---------------------------------------------------------------------------------------------------

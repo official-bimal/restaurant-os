@@ -17,7 +17,7 @@ import { createPurchaseOrder } from "./service";
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "stock.manage")) throw new DomainError("You do not have permission to plan stock orders.");
+  if (!can(ctx, "stock.manage")) throw new DomainError("You do not have permission to plan stock orders.");
 }
 
 export interface ReorderLineOut {

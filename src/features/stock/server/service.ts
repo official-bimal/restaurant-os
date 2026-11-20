@@ -15,7 +15,7 @@ import { activeLevelFor, ensureLevels, levelFor } from "./levels";
  */
 
 function need(ctx: TenantContext, permission: Permission) {
-  if (!can(ctx.role, permission)) throw new DomainError("You do not have permission to do that.");
+  if (!can(ctx, permission)) throw new DomainError("You do not have permission to do that.");
 }
 
 const MAX_QTY = 1_000_000_000;
@@ -61,7 +61,7 @@ export async function listStock(ctx: TenantContext) {
 }
 
 export async function lowStockCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "stock.view")) return 0;
+  if (!can(ctx, "stock.view")) return 0;
   const levels = await db.branchStock.findMany({
     where: { businessId: ctx.businessId, branchId: ctx.branchId, active: true, stockItem: { active: true } },
     select: { quantity: true, reorderLevel: true },

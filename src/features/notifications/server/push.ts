@@ -112,9 +112,9 @@ export async function pushToTeam(input: { businessId: string; branchId?: string;
         businessId: input.businessId,
         ...(input.branchId ? { OR: [{ allBranches: true }, { branches: { some: { branchId: input.branchId } } }] } : {}),
       },
-      select: { userId: true, role: true },
+      select: { userId: true, role: true, customRole: { select: { permissions: true } } },
     });
-    const userIds = members.filter((m) => can(m.role, input.permission)).map((m) => m.userId);
+    const userIds = members.filter((m) => (m.customRole ? m.customRole.permissions.includes(input.permission) : can(m.role, input.permission))).map((m) => m.userId);
     if (userIds.length === 0) return 0;
     const subs = await db.pushSubscription.findMany({ where: { businessId: input.businessId, userId: { in: userIds } } });
     return await deliver(subs, input.payload);

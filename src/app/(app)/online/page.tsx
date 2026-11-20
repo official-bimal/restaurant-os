@@ -19,7 +19,7 @@ export default async function OnlinePage({ searchParams }: PageProps<"/online">)
   const ctx = await requireTenant("order.edit");
   const q = await searchParams;
   const [inbox, recent, settings] = await Promise.all([getOnlineInbox(ctx), getRecentOnline(ctx), getOnlineSettings(ctx)]);
-  const canManage = can(ctx.role, "branch.manage");
+  const canManage = can(ctx, "branch.manage");
   const base = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
   const link = settings.token ? `${base}/o/${settings.token}` : null;
   const qr = link ? await QRCode.toString(link, { type: "svg", margin: 1, errorCorrectionLevel: "M" }) : null;

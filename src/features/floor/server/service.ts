@@ -12,7 +12,7 @@ import { closeTableSittingsInTx } from "@/features/guest/server/service";
 /** Areas and tables. Every query is filtered by ctx.businessId. */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "floor.manage")) throw new DomainError("You do not have permission to change tables.");
+  if (!can(ctx, "floor.manage")) throw new DomainError("You do not have permission to change tables.");
 }
 
 function cleanName(value: string, what: string, max = 40): string {

@@ -71,6 +71,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   const { home, sections } = buildNav({
     role: ctx.role,
+    permissions: ctx.permissions,
     multiBranch: business.multiBranch,
     hukka: hukkaOn,
     counts: { notifications: unreadNotifications.length, guestWaiting: waiting, onlineWaiting, reservationsWaiting, hukkaLong, lowStock, lowRatings, ownerAlerts },

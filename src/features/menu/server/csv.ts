@@ -14,7 +14,7 @@ import { menuToCsv, parseMenuCsv, planImport, summarize, type ExistingDish, type
 const MAX_BYTES = 1_000_000;
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
 }
 
 async function existingDishes(businessId: string): Promise<ExistingDish[]> {

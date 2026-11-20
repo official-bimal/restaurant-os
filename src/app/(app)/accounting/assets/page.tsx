@@ -12,7 +12,7 @@ export default async function AssetsPage({ searchParams }: PageProps<"/accountin
   const sp = await searchParams;
   const p = await currentPeriod(ctx);
   const assets = await listAssets(ctx);
-  const manage = can(ctx.role, "books.manage");
+  const manage = can(ctx, "books.manage");
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Fixed assets</h1>

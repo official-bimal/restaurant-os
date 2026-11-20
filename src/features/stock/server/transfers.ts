@@ -20,10 +20,10 @@ import { activeLevelFor, ensureLevels, levelFor } from "./levels";
 const MAX_QTY = 1_000_000_000;
 
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "stock.manage")) throw new DomainError("You do not have permission to move stock.");
+  if (!can(ctx, "stock.manage")) throw new DomainError("You do not have permission to move stock.");
 }
 function needView(ctx: TenantContext) {
-  if (!can(ctx.role, "stock.view")) throw new DomainError("You do not have permission to see stock.");
+  if (!can(ctx, "stock.view")) throw new DomainError("You do not have permission to see stock.");
 }
 
 /** Other active branches of the business that stock can be sent to. */

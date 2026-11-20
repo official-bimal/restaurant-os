@@ -23,10 +23,10 @@ const MANUAL_VOUCHERS = ["JOURNAL", "PAYMENT", "RECEIPT", "CONTRA", "OPENING"] a
 export type ManualVoucher = (typeof MANUAL_VOUCHERS)[number];
 
 function needView(ctx: TenantContext) {
-  if (!can(ctx.role, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
+  if (!can(ctx, "books.view")) throw new DomainError("You do not have permission to see the accounts.");
 }
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "books.manage")) throw new DomainError("Only the owner can change the accounts.");
+  if (!can(ctx, "books.manage")) throw new DomainError("Only the owner can change the accounts.");
 }
 
 function cleanText(value: string | undefined | null, max: number, what: string): string {

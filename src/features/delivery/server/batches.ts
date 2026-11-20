@@ -16,7 +16,7 @@ import { planRoute } from "@/features/delivery/route";
 const MAX_STOPS = 12;
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit")) throw new DomainError("You do not have permission to plan deliveries.");
+  if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to plan deliveries.");
 }
 
 /** Work out the visiting order for the orders of a run and write it down (stop numbers and the trip's length). */

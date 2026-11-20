@@ -18,7 +18,7 @@ import { publishLiveSoon } from "@/server/live";
 const MAX_SHIFT_MS = 16 * 60 * 60 * 1000;
 
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "time.manage")) throw new DomainError("You do not have permission to change staff time.");
+  if (!can(ctx, "time.manage")) throw new DomainError("You do not have permission to change staff time.");
 }
 
 async function timezone(businessId: string) {

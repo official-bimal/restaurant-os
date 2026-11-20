@@ -74,7 +74,7 @@ export interface PrintConfigInput {
 const cleanLine = (v: string, max: number) => v.replace(/\s+/g, " ").trim().slice(0, max);
 
 export async function savePrintConfig(ctx: TenantContext, input: PrintConfigInput) {
-  if (!can(ctx.role, "print.manage")) throw new DomainError("You do not have permission to change print settings.");
+  if (!can(ctx, "print.manage")) throw new DomainError("You do not have permission to change print settings.");
   for (const [name, v, lim] of [
     ["Paper width", input.paperWidthMm, PAPER_LIMITS.widthMm],
     ["Margin", input.marginMm, PAPER_LIMITS.marginMm],
@@ -124,7 +124,7 @@ const hash = (token: string) => createHash("sha256").update(token).digest("hex")
 
 /** Make a new key for the printer program. It is shown once; only a fingerprint is kept, so a lost key is replaced, not recovered. */
 export async function createAgentKey(ctx: TenantContext): Promise<string> {
-  if (!can(ctx.role, "print.manage")) throw new DomainError("You do not have permission to change print settings.");
+  if (!can(ctx, "print.manage")) throw new DomainError("You do not have permission to change print settings.");
   const token = `pk_${randomBytes(24).toString("base64url")}`;
   await db.$transaction(async (tx) => {
     await tx.printSetting.upsert({

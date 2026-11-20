@@ -24,7 +24,7 @@ export default async function PurchaseOrderPage({ params, searchParams }: PagePr
     if (e instanceof DomainError) notFound();
     throw e;
   }
-  const manage = can(ctx.role, "stock.manage");
+  const manage = can(ctx, "stock.manage");
   const estimated = po.lines.reduce((n, l) => n + l.estimatedTotal, 0);
   const paid = po.lines.reduce((n, l) => n + l.paidTotal, 0);
 

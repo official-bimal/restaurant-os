@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const ctx = await requireTenant();
-  if (!can(ctx.role, "branch.manage") && !can(ctx.role, "owner.control") && !can(ctx.role, "print.manage")) {
+  if (!can(ctx, "branch.manage") && !can(ctx, "owner.control") && !can(ctx, "print.manage")) {
     return <p className="card p-6 text-stone-600">You do not have settings to change.</p>;
   }
   const sp = await searchParams;
@@ -18,9 +18,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { name: true, multiBranch: true } }),
     db.branch.count({ where: { businessId: ctx.businessId, active: true } }),
   ]);
-  const { sections } = buildNav({ role: ctx.role, multiBranch: business.multiBranch, hukka: false, counts: {} });
+  const { sections } = buildNav({ role: ctx.role, permissions: ctx.permissions, multiBranch: business.multiBranch, hukka: false, counts: {} });
   const tools = sections.find((s) => s.id === "settings")?.items.filter((i) => i.href !== "/settings") ?? [];
-  const canSwitch = can(ctx.role, "branch.manage");
+  const canSwitch = can(ctx, "branch.manage");
 
   return (
     <div className="space-y-6">

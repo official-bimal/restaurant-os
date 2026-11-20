@@ -13,7 +13,7 @@ import { cleanWifi, WifiError } from "@/features/guest/wifi";
  */
 
 function needManage(ctx: TenantContext) {
-  if (!can(ctx.role, "branch.manage")) throw new DomainError("Only the owner can manage branches.");
+  if (!can(ctx, "branch.manage")) throw new DomainError("Only the owner can manage branches.");
 }
 
 function cleanName(value: string): string {

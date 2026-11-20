@@ -22,7 +22,7 @@ import {
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "campaign.manage")) throw new DomainError("You do not have permission to manage campaigns.");
+  if (!can(ctx, "campaign.manage")) throw new DomainError("You do not have permission to manage campaigns.");
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

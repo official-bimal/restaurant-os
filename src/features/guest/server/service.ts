@@ -432,7 +432,7 @@ export async function getSettledSummary(claims: { sessionId: string; tableId: st
 // --- staff side ----------------------------------------------------------
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit")) throw new DomainError("You do not have permission to handle guest orders.");
+  if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to handle guest orders.");
 }
 
 export async function getInbox(ctx: TenantContext) {
@@ -460,7 +460,7 @@ export async function getInbox(ctx: TenantContext) {
 }
 
 export async function inboxCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "order.edit")) return 0;
+  if (!can(ctx, "order.edit")) return 0;
   const [a, b] = await Promise.all([
     db.guestSubmission.count({ where: { businessId: ctx.businessId, status: "PENDING", table: { branchId: ctx.branchId } } }),
     db.serviceRequest.count({ where: { businessId: ctx.businessId, status: "OPEN", table: { branchId: ctx.branchId } } }),
@@ -637,7 +637,7 @@ export async function closeTableSittingsInTx(tx: Tx, businessId: string, tableId
  * guest order, then water).
  */
 export async function tableAlerts(ctx: TenantContext): Promise<Record<string, string>> {
-  if (!can(ctx.role, "order.edit") || !ctx.branchId) return {};
+  if (!can(ctx, "order.edit") || !ctx.branchId) return {};
   const [submissions, requests] = await Promise.all([
     db.guestSubmission.findMany({ where: { businessId: ctx.businessId, status: "PENDING", table: { branchId: ctx.branchId } }, select: { tableId: true } }),
     db.serviceRequest.findMany({ where: { businessId: ctx.businessId, status: "OPEN", table: { branchId: ctx.branchId } }, select: { tableId: true, kind: true } }),

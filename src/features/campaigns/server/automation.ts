@@ -24,7 +24,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const canMessage = (c: { marketingConsent: boolean; consentVerified: boolean }) => c.marketingConsent && c.consentVerified;
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "campaign.manage")) throw new DomainError("You do not have permission to manage campaigns.");
+  if (!can(ctx, "campaign.manage")) throw new DomainError("You do not have permission to manage campaigns.");
 }
 
 // --- the rules (staff side) ------------------------------------------------------
@@ -50,7 +50,7 @@ export async function getRules(ctx: TenantContext) {
       ? { kind, enabled: r.enabled, autoSend: r.autoSend, template: r.template, offerPoints: r.offerPoints, offerDays: r.offerDays, cooldownDays: r.cooldownDays, saved: true }
       : { kind, enabled: false, autoSend: false, template: d.template, offerPoints: d.offerPoints, offerDays: d.offerDays, cooldownDays: d.cooldownDays, saved: false };
   });
-  return { rules, provider: getProvider()?.name ?? null, canAutoSend: can(ctx.role, "message.send") };
+  return { rules, provider: getProvider()?.name ?? null, canAutoSend: can(ctx, "message.send") };
 }
 
 export interface RuleInput {
@@ -77,9 +77,9 @@ export async function saveRule(ctx: TenantContext, kind: string, input: RuleInpu
 
   const existing = await db.automationRule.findUnique({ where: { businessId_kind: { businessId: ctx.businessId, kind } } });
   // Text that is sent without anyone looking is only changed by someone allowed to send.
-  if (existing?.autoSend && !can(ctx.role, "message.send")) throw new DomainError("This rule sends by itself, so only the owner can change it.");
+  if (existing?.autoSend && !can(ctx, "message.send")) throw new DomainError("This rule sends by itself, so only the owner can change it.");
   if (input.autoSend) {
-    if (!can(ctx.role, "message.send")) throw new DomainError("Only the owner can switch on sending by the app.");
+    if (!can(ctx, "message.send")) throw new DomainError("Only the owner can switch on sending by the app.");
     if (!getProvider()) throw new DomainError("Messaging is not set up on this server yet, so the app cannot send. It can still prepare the messages for you.");
   }
   const autoSend = input.enabled && input.autoSend;
@@ -97,7 +97,7 @@ export async function saveRule(ctx: TenantContext, kind: string, input: RuleInpu
 
 /** A guest's birthday (month and day only). Both empty clears it. */
 export async function setBirthday(ctx: TenantContext, customerId: string, month: number | null, day: number | null) {
-  if (!can(ctx.role, "customer.manage")) throw new DomainError("You do not have permission to change customers.");
+  if (!can(ctx, "customer.manage")) throw new DomainError("You do not have permission to change customers.");
   const clearing = month === null && day === null;
   if (!clearing && !isValidBirthday(month, day)) throw new DomainError("Choose a real month and day.");
   await db.$transaction(async (tx) => {

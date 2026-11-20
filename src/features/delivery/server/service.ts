@@ -17,7 +17,7 @@ import { canMoveDelivery } from "@/features/orders/server/delivery";
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "floor.manage")) throw new DomainError("You do not have permission to change delivery zones.");
+  if (!can(ctx, "floor.manage")) throw new DomainError("You do not have permission to change delivery zones.");
 }
 
 function cleanName(value: string): string {
@@ -244,7 +244,7 @@ export async function riderUpdate(token: string, action: RiderAction) {
 // --- rider accounts: their own list of deliveries ---------------------------------
 
 function needRide(ctx: TenantContext) {
-  if (!can(ctx.role, "delivery.ride")) throw new DomainError("You do not have permission to make deliveries.");
+  if (!can(ctx, "delivery.ride")) throw new DomainError("You do not have permission to make deliveries.");
 }
 
 /** Rider accounts a cashier can choose when sending a delivery out from the current branch. */

@@ -58,14 +58,14 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   const order = await getOrder(ctx, id);
   if (!order) notFound();
 
-  const usedReward = order.invoice && can(ctx.role, "bill.refund") ? await rewardUsedOnBill(ctx.businessId, order.id) : null;
+  const usedReward = order.invoice && can(ctx, "bill.refund") ? await rewardUsedOnBill(ctx.businessId, order.id) : null;
   const closed = order.status === "PAID" || order.status === "CANCELLED" || order.status === "MERGED";
   const discountPct = Math.min(100, Math.max(0, Number(query.discount ?? 0) || 0));
   const discount: DiscountInput =
     discountPct > 0 ? { kind: "percent", bps: Math.round(discountPct * 100) } : { kind: "none" };
   const hasActive = order.items.some((i) => i.status !== "CANCELLED");
-  const canCustomer = can(ctx.role, "customer.use") && !closed;
-  const loyalty = can(ctx.role, "customer.use") && !order.invoice ? await getOrderLoyalty(ctx, id) : null;
+  const canCustomer = can(ctx, "customer.use") && !closed;
+  const loyalty = can(ctx, "customer.use") && !order.invoice ? await getOrderLoyalty(ctx, id) : null;
 
   // The bill without any reward first: it tells us how many reward blocks could be used.
   const base = !order.invoice && hasActive ? await previewBill(ctx, id, discount) : null;
@@ -96,20 +96,20 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
     }
   }
   const [menu, addOns] = closed ? [[], new Map<string, Awaited<ReturnType<typeof addOnsForMenu>> extends Map<string, infer V> ? V : never>()] : await Promise.all([listMenu(ctx), addOnsForMenu(ctx)]);
-  const riders = order.type === "DELIVERY" && order.deliveryStatus === "PREPARING" && can(ctx.role, "order.edit") ? await listRiders(ctx) : [];
+  const riders = order.type === "DELIVERY" && order.deliveryStatus === "PREPARING" && can(ctx, "order.edit") ? await listRiders(ctx) : [];
   const riderLocation = locationView(order);
   const mp = mapPoints(order);
   const appUrl = (process.env.APP_URL ?? "").replace(/\/$/, "");
   // Payment services: which ones the cashier can use, and the payments already started for this bill.
-  const canTakePayment = can(ctx.role, "bill.checkout") && !order.invoice && !closed;
+  const canTakePayment = can(ctx, "bill.checkout") && !order.invoice && !closed;
   const payMethods = canTakePayment ? await checkoutMethods(ctx) : [];
   const intents = canTakePayment ? await listBillIntents(ctx, id) : [];
   const payBase = baseUrlFrom(await headers());
   const intentQr = new Map(await Promise.all(intents.filter((i) => i.status !== "FAILED").map(async (i) => [i.id, await QRCode.toString(`${payBase}/pay/${i.token}`, { type: "svg", margin: 1, errorCorrectionLevel: "M" })] as const)));
-  const canRestructure = can(ctx.role, "order.restructure") && !closed;
+  const canRestructure = can(ctx, "order.restructure") && !closed;
   // Anyone who can edit may cancel an empty order; food on it needs the void permission.
   const hasFood = order.items.some((i) => i.status !== "CANCELLED");
-  const canCancel = !closed && can(ctx.role, hasFood ? "order.void" : "order.edit");
+  const canCancel = !closed && can(ctx, hasFood ? "order.void" : "order.edit");
   const printCfg = await getPrintConfig(ctx.businessId);
   const queueButton = (kind: string, id: string) => (
     <form action={queuePrintAction.bind(null, kind, id, order.id)}>
@@ -118,7 +118,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   );
   const refundedSoFar = order.invoice ? order.invoice.creditNotes.reduce((n, c) => n + c.grandTotal, 0) : 0;
   const refundLeft = order.invoice ? order.invoice.grandTotal - refundedSoFar : 0;
-  const canRefund = can(ctx.role, "bill.refund") && !!order.invoice && refundLeft > 0;
+  const canRefund = can(ctx, "bill.refund") && !!order.invoice && refundLeft > 0;
   const options = canRestructure ? await listRestructureOptions(ctx, id) : null;
   const activeItems = order.items.filter((i) => i.status !== "CANCELLED");
   // A fresh key per page view: tapping "Split" twice cannot make two new bills.
@@ -198,7 +198,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                     {!closed &&
                       nextItemStatuses(item.status)
                         .filter((to) => to !== "CANCELLED")
-                        .filter((to) => (to === "SERVED" ? can(ctx.role, "order.edit") : can(ctx.role, "kitchen.update")))
+                        .filter((to) => (to === "SERVED" ? can(ctx, "order.edit") : can(ctx, "kitchen.update")))
                         .map((to) => (
                           <form key={to} action={itemStatusAction.bind(null, order.id, item.id)}>
                             <input type="hidden" name="to" value={to} />
@@ -207,7 +207,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                             </button>
                           </form>
                         ))}
-                    {!closed && nextItemStatuses(item.status).includes("CANCELLED") && can(ctx.role, "order.cancelItem") && (
+                    {!closed && nextItemStatuses(item.status).includes("CANCELLED") && can(ctx, "order.cancelItem") && (
                       <form action={cancelItemAction.bind(null, order.id, item.id)} className="flex gap-1">
                         <input
                           name="reason"
@@ -227,7 +227,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
             )}
           </section>
 
-          {!closed && can(ctx.role, "order.edit") && (
+          {!closed && can(ctx, "order.edit") && (
             <section className="rounded-2xl bg-white p-4 border border-stone-200 shadow-sm" aria-label="Menu">
               <h2 className="mb-1 font-semibold">Add dishes</h2>
               <OrderMenu
@@ -298,7 +298,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                   <p className="text-stone-500">Anyone with a link can open it, so send each only to that person.</p>
                 </div>
               )}
-              {can(ctx.role, "order.edit") && order.status !== "CANCELLED" && order.status !== "MERGED" && (
+              {can(ctx, "order.edit") && order.status !== "CANCELLED" && order.status !== "MERGED" && (
                 <div className="mt-3 space-y-2">
                   {order.deliveryStatus === "PREPARING" && riders.length > 0 && (
                     <form action={assignRiderAction.bind(null, order.id)} className="flex gap-2">
@@ -745,7 +745,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
                   <li className="text-stone-400">Only a guide. To pay separately, split the bill.</li>
                 </ul>
               )}
-              {can(ctx.role, "bill.checkout") && (
+              {can(ctx, "bill.checkout") && (
                 <form action={checkoutAction.bind(null, order.id)} className="mt-3 space-y-2">
                   <input type="hidden" name="discountPercent" value={discountPct} />
                   <input type="hidden" name="redeemPoints" value={totals.redeemPoints} />

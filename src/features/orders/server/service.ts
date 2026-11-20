@@ -40,7 +40,7 @@ import { canTransitionItem } from "@/features/orders/status";
 export { DomainError };
 
 function need(ctx: TenantContext, permission: Permission) {
-  if (!can(ctx.role, permission)) throw new DomainError("You do not have permission to do that.");
+  if (!can(ctx, permission)) throw new DomainError("You do not have permission to do that.");
 }
 
 const ORDER_INCLUDE = {
@@ -272,7 +272,7 @@ export async function addItems(ctx: TenantContext, orderId: string, lines: NewLi
 
 export async function setItemStatus(ctx: TenantContext, itemId: string, to: ItemStatus) {
   const permission: Permission = to === "SERVED" ? "order.edit" : "kitchen.update";
-  if (!can(ctx.role, permission) && !can(ctx.role, "kitchen.update")) {
+  if (!can(ctx, permission) && !can(ctx, "kitchen.update")) {
     throw new DomainError("You do not have permission to do that.");
   }
   const { businessId, branchId } = scope(ctx);

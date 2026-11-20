@@ -16,7 +16,7 @@ import { localParts, parseTime, pickActiveSet } from "@/features/menu/menu-sets"
 type Db = Tx | typeof db;
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
 }
 
 /**

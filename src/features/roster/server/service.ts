@@ -14,7 +14,7 @@ import { clashes, isValidTime, shareOut, shiftMinutes, weekDays, weekStartOf, ty
  */
 
 function needRoster(ctx: TenantContext) {
-  if (!can(ctx.role, "time.manage")) throw new DomainError("You do not have permission to change the roster.");
+  if (!can(ctx, "time.manage")) throw new DomainError("You do not have permission to change the roster.");
 }
 
 /** People who can be rostered at this branch: staff other than riders and the accountant, who work here. */
@@ -109,10 +109,10 @@ export async function copyWeek(ctx: TenantContext, fromDate: string, toDate: str
 // tips
 
 function needDrawer(ctx: TenantContext) {
-  if (!can(ctx.role, "drawer.use")) throw new DomainError("You do not have permission to record tips.");
+  if (!can(ctx, "drawer.use")) throw new DomainError("You do not have permission to record tips.");
 }
 function needPayroll(ctx: TenantContext) {
-  if (!can(ctx.role, "payroll.manage")) throw new DomainError("Only the owner can share out tips.");
+  if (!can(ctx, "payroll.manage")) throw new DomainError("Only the owner can share out tips.");
 }
 
 export async function recordTip(ctx: TenantContext, input: { date: string; amount: number; method: string; note?: string }) {
@@ -133,11 +133,11 @@ export async function recordTip(ctx: TenantContext, input: { date: string; amoun
 }
 
 export async function listTips(ctx: TenantContext, from: string, to: string) {
-  if (!can(ctx.role, "drawer.use") && !can(ctx.role, "payroll.manage")) throw new DomainError("You do not have permission to see tips.");
+  if (!can(ctx, "drawer.use") && !can(ctx, "payroll.manage")) throw new DomainError("You do not have permission to see tips.");
   if (!isValidDate(from) || !isValidDate(to) || from > to) throw new DomainError("Choose valid dates.");
   const { businessId, branchId } = scope(ctx);
   const rows = await db.tipEntry.findMany({ where: { businessId, branchId, date: { gte: from, lte: to } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 500 });
-  const payouts = can(ctx.role, "payroll.manage")
+  const payouts = can(ctx, "payroll.manage")
     ? await db.tipPayout.findMany({ where: { businessId, branchId }, orderBy: { createdAt: "desc" }, take: 10, include: { lines: { orderBy: { amount: "desc" } } } })
     : [];
   return { tips: rows, unshared: rows.filter((r) => !r.payoutId).reduce((n, r) => n + r.amount, 0), payouts };

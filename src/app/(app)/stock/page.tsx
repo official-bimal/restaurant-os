@@ -34,8 +34,8 @@ export default async function StockPage({ searchParams }: PageProps<"/stock">) {
     listNotStockedHere(ctx),
     db.branch.findUniqueOrThrow({ where: { businessId_id: { businessId: ctx.businessId, id: ctx.branchId } }, select: { name: true } }),
   ]);
-  const manage = can(ctx.role, "stock.manage");
-  const waste = can(ctx.role, "stock.waste");
+  const manage = can(ctx, "stock.manage");
+  const waste = can(ctx, "stock.waste");
   const attention = items.filter((i) => i.status !== "OK");
 
   const itemSelect = (
@@ -60,12 +60,12 @@ export default async function StockPage({ searchParams }: PageProps<"/stock">) {
             All branches and transfers
           </Link>
         )}
-        {can(ctx.role, "supplier.pay") && (
+        {can(ctx, "supplier.pay") && (
           <Link href="/stock/bills" className={`${small} flex items-center`}>
             Supplier bills
           </Link>
         )}
-        {can(ctx.role, "report.view") && (
+        {can(ctx, "report.view") && (
           <Link href="/stock/value" className={`${small} flex items-center`}>
             Value and cost
           </Link>

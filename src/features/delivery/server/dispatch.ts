@@ -15,10 +15,10 @@ import { dayRange, localDate } from "@/lib/business-day";
 type Db = Tx | typeof db;
 
 function needDispatch(ctx: TenantContext) {
-  if (!can(ctx.role, "order.edit")) throw new DomainError("You do not have permission to see deliveries.");
+  if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to see deliveries.");
 }
 function needSettle(ctx: TenantContext) {
-  if (!can(ctx.role, "rider.settle")) throw new DomainError("You do not have permission to handle rider cash and pay.");
+  if (!can(ctx, "rider.settle")) throw new DomainError("You do not have permission to handle rider cash and pay.");
 }
 
 const money = (n: number) => `Rs ${(n / 100).toLocaleString("en-US", { minimumFractionDigits: n % 100 ? 2 : 0 })}`;
@@ -127,7 +127,7 @@ export async function getRiderAccounts(ctx: TenantContext) {
 
 /** A rider's own numbers, for their page. */
 export async function getMyAccount(ctx: TenantContext) {
-  if (!can(ctx.role, "delivery.ride")) throw new DomainError("You do not have permission to make deliveries.");
+  if (!can(ctx, "delivery.ride")) throw new DomainError("You do not have permission to make deliveries.");
   return accountOf(db, ctx.businessId, ctx.userId);
 }
 
@@ -182,7 +182,7 @@ export async function recordPayout(ctx: TenantContext, riderUserId: string, amou
 
 /** What a rider is paid per completed delivery. Applies to deliveries from now on; finished ones keep what they earned. */
 export async function setRiderPay(ctx: TenantContext, riderUserId: string, paisa: number) {
-  if (!can(ctx.role, "staff.manage")) throw new DomainError("You do not have permission to set rider pay.");
+  if (!can(ctx, "staff.manage")) throw new DomainError("You do not have permission to set rider pay.");
   if (!Number.isInteger(paisa) || paisa < 0 || paisa > 10_000_00) throw new DomainError("Enter a pay between Rs 0 and Rs 10,000 per delivery.");
   await db.$transaction(async (tx) => {
     const m = await ownRider(tx, ctx, riderUserId);

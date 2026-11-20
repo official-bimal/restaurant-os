@@ -9,7 +9,7 @@ import { Prisma } from "@/generated/prisma/client";
 /** Menu management. Every query is filtered by ctx.businessId. */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
 }
 
 function cleanName(value: string, what: string): string {

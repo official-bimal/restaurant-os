@@ -12,7 +12,7 @@ import { detectImageType, MAX_IMAGE_BYTES } from "../image";
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
+  if (!can(ctx, "menu.manage")) throw new DomainError("You do not have permission to change the menu.");
 }
 
 export async function setDishImage(ctx: TenantContext, menuItemId: string, data: Uint8Array) {

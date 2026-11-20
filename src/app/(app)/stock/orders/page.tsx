@@ -24,7 +24,7 @@ const STATUS = {
 export default async function PurchaseOrdersPage({ searchParams }: PageProps<"/stock/orders">) {
   const ctx = await requireTenant("stock.view");
   const { error, fill } = await searchParams;
-  const manage = can(ctx.role, "stock.manage");
+  const manage = can(ctx, "stock.manage");
   const [orders, suppliers, items, suggestions] = await Promise.all([
     listPurchaseOrders(ctx),
     listSuppliers(ctx),

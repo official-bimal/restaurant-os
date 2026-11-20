@@ -21,7 +21,7 @@ import { fullSummary, shortSummary, type SummaryData } from "@/features/owner/su
  */
 
 function need(ctx: TenantContext) {
-  if (!can(ctx.role, "owner.control")) throw new DomainError("Only the owner can use owner controls.");
+  if (!can(ctx, "owner.control")) throw new DomainError("Only the owner can use owner controls.");
 }
 
 // --- settings -----------------------------------------------------------------------
@@ -225,7 +225,7 @@ export async function listAlerts(ctx: TenantContext, take = 60) {
 }
 
 export async function unseenAlertCount(ctx: TenantContext): Promise<number> {
-  if (!can(ctx.role, "owner.control")) return 0;
+  if (!can(ctx, "owner.control")) return 0;
   return db.ownerAlert.count({ where: { businessId: ctx.businessId, seenAt: null } });
 }
 

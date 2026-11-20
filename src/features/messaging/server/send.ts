@@ -21,13 +21,13 @@ const IN_PROGRESS = "sending";
 const canMessage = (c: { marketingConsent: boolean; consentVerified: boolean }) => c.marketingConsent && c.consentVerified;
 
 function needSend(ctx: TenantContext) {
-  if (!can(ctx.role, "message.send") || !can(ctx.role, "campaign.manage")) throw new DomainError("You do not have permission to send messages.");
+  if (!can(ctx, "message.send") || !can(ctx, "campaign.manage")) throw new DomainError("You do not have permission to send messages.");
 }
 
 /** What the campaign page needs to decide whether to show a Send button. */
 export async function getSendStatus(ctx: TenantContext, campaignId: string) {
   const provider = getProvider();
-  const allowed = can(ctx.role, "message.send");
+  const allowed = can(ctx, "message.send");
   if (!provider || !allowed) return { provider: provider?.name ?? null, allowed, ready: 0, remainingToday: 0 };
   const [messages, used] = await Promise.all([
     db.campaignMessage.findMany({
