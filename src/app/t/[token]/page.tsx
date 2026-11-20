@@ -13,6 +13,8 @@ import { wifiQrPayload } from "@/features/guest/wifi";
 import { LangSwitch, T } from "./lang";
 import type { StringKey } from "@/features/guest/i18n";
 import { getDishRatingState, getFeedbackState } from "@/features/feedback/server/service";
+import { checkGuestPayments, guestPayInfo } from "@/features/payments/server/guest";
+import { payAtTableAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +137,9 @@ export default async function GuestPage({ params, searchParams }: PageProps<"/t/
     );
   }
 
+  // A payment the guest started but never came back from: ask the service now, so the bill can close without them.
+  await checkGuestPayments(guest.ctx);
+  const pay = await guestPayInfo(guest.ctx.businessId, guest.ctx.tableId);
   const view = await getGuestView(guest.ctx);
   const bestIds = new Set(view.bestSellerIds);
   const flat = view.menu.flatMap((c) => c.items);
@@ -223,6 +228,57 @@ export default async function GuestPage({ params, searchParams }: PageProps<"/t/
           <p className="mt-1 text-xs text-stone-500">
             <T k="includesCharges" />
           </p>
+        </section>
+      )}
+
+      {pay.enabled && view.bills.length > 0 && (
+        <section aria-label="Pay from your phone" className="mb-5 rounded-2xl bg-white p-3 border border-stone-200 shadow-sm">
+          <h2 className="font-semibold">
+            <T k="payTitle" />
+          </h2>
+          <p className="mt-0.5 text-xs text-stone-500">
+            <T k="payHint" />
+          </p>
+          {pay.waitingForStaff ? (
+            <p role="status" className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+              <T k="payWaitStaff" />
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-3">
+              {view.bills.map((b) => {
+                const going = pay.inProgress.find((p) => p.orderId === b.orderId);
+                return (
+                  <li key={b.orderId}>
+                    {view.bills.length > 1 && (
+                      <p className="mb-1 text-sm text-stone-600">
+                        <T k="billN" v={{ n: b.number }} />
+                      </p>
+                    )}
+                    {going ? (
+                      <div className="space-y-2">
+                        <p role="status" className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+                          <T k="payChecking" v={{ service: going.label }} />
+                        </p>
+                        <a href={`/pay/${going.token}`} className="block min-h-12 rounded-xl border border-stone-300 px-4 py-3 text-center font-medium">
+                          <T k="payContinue" v={{ service: going.label }} />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {pay.methods.map((m) => (
+                          <form key={m.id} action={payAtTableAction.bind(null, token, b.orderId, m.id)}>
+                            <button className="min-h-12 w-full rounded-xl bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700">
+                              <T k="payBill" v={{ amount: formatNpr(b.total) }} /> <T k="payWith" v={{ service: m.label }} />
+                            </button>
+                          </form>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       )}
 

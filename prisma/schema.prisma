@@ -167,6 +167,8 @@ model Business {
   instagram                 String?
   /// The business default accent colour (#rrggbb). A person can choose their own in Appearance.
   brandAccent               String?
+  /// Guests may pay their own bill from the table QR page with eSewa or Khalti (needs one of them switched on). Off until the owner turns it on.
+  guestPayEnabled           Boolean  @default(false)
   timezone                  String   @default("Asia/Kathmandu")
   /// Shows the branch switcher, branch reports and the Branches page. Off for a single-location business, so the menus stay simple.
   multiBranch               Boolean  @default(false)
@@ -2473,6 +2475,8 @@ model PaymentIntent {
   checkout    Json?
   failReason  String?
   createdById String?
+  /// Started by a guest from the table page (no cashier): the bill is closed automatically once the payment is confirmed.
+  byGuest     Boolean      @default(false)
   createdAt   DateTime     @default(now())
   expiresAt   DateTime
   paidAt      DateTime?

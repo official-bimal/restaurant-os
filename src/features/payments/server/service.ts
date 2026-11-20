@@ -7,6 +7,9 @@ import { audit } from "@/server/audit";
 import { seal, unseal } from "@/lib/secretbox";
 import { randomKey } from "@/lib/random-key";
 import { checkout, previewBill } from "@/features/orders/server/service";
+import { pushToTeam } from "@/features/notifications/server/push";
+import { publishLive } from "@/server/live";
+import { formatNpr } from "@/features/billing/calc";
 import {
   ESEWA_TEST,
   esewaConfirm,
@@ -160,6 +163,7 @@ export async function createIntent(
   params: BillParams,
   baseUrl: string,
   deps: { fetch?: FetchLike } = {},
+  meta: { byGuest?: boolean } = {},
 ) {
   needBill(ctx);
   const { businessId, branchId } = scope(ctx);
@@ -200,6 +204,7 @@ export async function createIntent(
         payUrl,
         checkout: { ...params } as object,
         createdById: ctx.userId,
+        byGuest: !!meta.byGuest,
         expiresAt: new Date(Date.now() + INTENT_MINUTES * 60_000),
       },
     });
@@ -255,6 +260,9 @@ async function settle(intentId: string, c: Confirmation) {
   }
 }
 
+/** The saved set-up of eSewa or Khalti for a business, or null when it is off or incomplete. */
+export const resolveProvider = (businessId: string, provider: "ESEWA" | "KHALTI") => resolve(businessId, provider);
+
 /** Asks the service whether an attempt was paid, and records the answer. Safe to run any number of times. */
 async function check(intentId: string, deps: { fetch?: FetchLike } = {}): Promise<string> {
   const i = await db.paymentIntent.findUniqueOrThrow({ where: { id: intentId } });
@@ -265,7 +273,15 @@ async function check(intentId: string, deps: { fetch?: FetchLike } = {}): Promis
   const f = deps.fetch ?? realFetch;
   const c = provider === "ESEWA" ? await esewaConfirm(f, { mode: cfg.mode, productCode: cfg.merchantCode, amount: i.amount, uuid: i.uuid }) : await khaltiLookup(f, { mode: cfg.mode, secret: cfg.secret, pidx: i.providerRef ?? "", amount: i.amount });
   await settle(i.id, c);
-  return (await db.paymentIntent.findUniqueOrThrow({ where: { id: i.id }, select: { status: true } })).status;
+  const status = (await db.paymentIntent.findUniqueOrThrow({ where: { id: i.id }, select: { status: true } })).status;
+  // A guest who paid from the table page has no cashier to press "complete": the bill closes itself, once, when the service confirms.
+  if (status === "PAID" && i.byGuest) await completeGuestPayment(i.id);
+  return status;
+}
+
+/** Ask the service about a guest's unfinished payment (their page is open but they may never come back from the service). */
+export async function refreshByGuest(intentId: string, deps: { fetch?: FetchLike } = {}): Promise<string> {
+  return check(intentId, deps);
 }
 
 /** eSewa sent the customer back with signed `data`: check the signature, then ask eSewa. Returns the token of the attempt, or null. */
@@ -299,7 +315,42 @@ export async function getResult(token: string) {
   const i = await db.paymentIntent.findUnique({ where: { token } });
   if (!i) return null;
   const biz = await db.business.findUniqueOrThrow({ where: { id: i.businessId }, select: { name: true } });
-  return { status: i.status, amount: i.amount, business: biz.name, provider: providerLabel(i.provider) };
+  // A guest who paid from the table page is offered the way back to it.
+  let back: string | null = null;
+  if (i.byGuest) {
+    const o = await db.order.findFirst({ where: { id: i.orderId, businessId: i.businessId }, select: { table: { select: { publicToken: true } } } });
+    if (o?.table) back = `/t/${o.table.publicToken}`;
+  }
+  return { status: i.status, amount: i.amount, business: biz.name, provider: providerLabel(i.provider), back };
+}
+
+/** The system's own identity when it closes a guest's bill: this business and branch only, with a cashier's rights, never a signed-in person. */
+export function guestPayCtx(businessId: string, branchId: string): TenantContext {
+  return { userId: "guest-pay", businessId, branchId, branchIds: [branchId], role: "CASHIER" };
+}
+
+/**
+ * A guest's payment was confirmed: close the bill exactly as it was when they paid, and tell the floor. If the bill changed in between
+ * (an item was added after the payment started), it is left paid and open and the staff are told to sort it out with the customer.
+ */
+export async function completeGuestPayment(intentId: string) {
+  const i = await db.paymentIntent.findUnique({ where: { id: intentId } });
+  if (!i || !i.byGuest || i.status !== "PAID" || i.consumedAt) return;
+  const order = await db.order.findFirst({ where: { id: i.orderId, businessId: i.businessId }, select: { number: true, table: { select: { label: true } } } });
+  const where = order?.table ? `Table ${order.table.label}` : `Order #${order?.number ?? ""}`;
+  const tell = (title: string, body: string) =>
+    void pushToTeam({ businessId: i.businessId, branchId: i.branchId, permission: "bill.checkout", payload: { title, body, tag: `guestpay-${i.id}`, url: `/orders/${i.orderId}` } }).catch(() => undefined);
+  try {
+    await completeFromIntent(guestPayCtx(i.businessId, i.branchId), i.id);
+    publishLive({ businessId: i.businessId, branchId: i.branchId, topic: "guest" });
+    tell(`${where} paid ${formatNpr(i.amount)} with ${providerLabel(i.provider)}`, "The bill is closed.");
+  } catch (e) {
+    // Two confirmations arriving together: the second finds the bill already being closed by the first, which is fine.
+    if (e instanceof DomainError && /already been used/.test(e.message)) return;
+    const why = e instanceof DomainError ? e.message : "It could not be closed.";
+    publishLive({ businessId: i.businessId, branchId: i.branchId, topic: "guest" });
+    tell(`${where} paid ${formatNpr(i.amount)} with ${providerLabel(i.provider)}, but the bill is still open`, why.slice(0, 140));
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------

@@ -321,9 +321,9 @@ export async function getGuestView(gc: GuestContext) {
           roundToRupee: business.roundToRupee,
         },
       );
-      return { number: o.number, total: totals.grandTotal, points: pointsEarned(totals.grandTotal, settings) };
+      return { orderId: o.id, number: o.number, total: totals.grandTotal, points: pointsEarned(totals.grandTotal, settings) };
     })
-    .filter((b): b is { number: number; total: number; points: number } => b !== null);
+    .filter((b): b is { orderId: string; number: number; total: number; points: number } => b !== null);
   const estimate = bills.length ? { grandTotal: bills.reduce((n, b) => n + b.total, 0) } : null;
   const orderItems = orders.flatMap((o) => o.items);
 

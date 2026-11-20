@@ -4,7 +4,8 @@ import { requireTenant } from "@/server/auth";
 import { baseUrlFrom } from "@/features/payments/server/base-url";
 import { PROVIDERS } from "@/features/payments/gateways";
 import { getPaymentSettings } from "@/features/payments/server/service";
-import { savePaymentSettingAction } from "./actions";
+import { db } from "@/server/db";
+import { guestPayAction, savePaymentSettingAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ export default async function PaymentSettingsPage({ searchParams }: PageProps<"/
   const sp = await searchParams;
   const [settings, h] = [await getPaymentSettings(ctx), await headers()];
   const base = baseUrlFrom(h);
+  const guestPay = (await db.business.findUniqueOrThrow({ where: { id: ctx.businessId }, select: { guestPayEnabled: true } })).guestPayEnabled;
+  const apiReady = settings.some((s) => s.kind === "API" && s.enabled);
   const chip = (id: string) => PROVIDERS.find((p) => p.id === id)!.chip;
   return (
     <div className="space-y-5">
@@ -58,6 +61,25 @@ export default async function PaymentSettingsPage({ searchParams }: PageProps<"/
           The customer&apos;s phone is sent back to <code className="rounded bg-stone-100 px-1">{base}</code> after paying, so it must be an address their phone can open. On the shop Wi-Fi that works with the shop computer&apos;s address;
           for customers away from the shop, set <code className="rounded bg-stone-100 px-1">APP_URL</code> to your public https address. Keys are stored encrypted and are never shown again after saving.
         </p>
+      </section>
+
+      <section className="card space-y-3 p-5" aria-labelledby="atTable">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 id="atTable" className="mr-auto font-semibold">
+            Guests pay at the table
+          </h2>
+          <span className={`rounded-full px-3 py-1 text-sm font-medium ${guestPay ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-stone-600"}`}>{guestPay ? "On" : "Off"}</span>
+          <form action={guestPayAction.bind(null, !guestPay)}>
+            <button className="btn-secondary" disabled={!guestPay && !apiReady}>
+              {guestPay ? "Turn off" : "Turn on"}
+            </button>
+          </form>
+        </div>
+        <p className="text-sm text-stone-600">
+          A guest who scanned the table&apos;s QR code sees <strong>Pay</strong> under their bill and pays with eSewa or Khalti on their own phone. The software asks eSewa or Khalti whether it was really paid, and the bill then closes by itself: the table is freed, the invoice is made and
+          the floor is told. Each bill at a table (after a split) is paid on its own. The amount is always worked out by the software, with no discount: if you give a discount, start the payment yourself from the order page.
+        </p>
+        {!apiReady && <p className="text-sm text-amber-800">Switch on eSewa or Khalti below first.</p>}
       </section>
 
       <div className="space-y-4">

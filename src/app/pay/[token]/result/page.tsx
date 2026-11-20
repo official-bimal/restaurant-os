@@ -19,11 +19,16 @@ export default async function PayResultPage({ params }: PageProps<"/pay/[token]/
         <p className="text-sm text-stone-500">{r.business}</p>
         <h1 className="text-3xl font-semibold">{formatNpr(r.amount)}</h1>
         {paid ? (
-          <p className="rounded-xl bg-emerald-50 p-4 text-emerald-800">Payment received through {r.provider}. Thank you! You can close this page.</p>
+          <p className="rounded-xl bg-emerald-50 p-4 text-emerald-800">Payment received through {r.provider}. Thank you! {r.back ? "Your bill is being closed." : "You can close this page."}</p>
         ) : r.status === "FAILED" || r.status === "CANCELLED" || r.status === "EXPIRED" ? (
           <p className="rounded-xl bg-red-50 p-4 text-red-800">The payment was not completed, and nothing was taken. Please tell the cashier.</p>
         ) : (
           <p className="rounded-xl bg-amber-50 p-4 text-amber-900">We are waiting for {r.provider} to confirm your payment. Please tell the cashier if this does not change in a minute.</p>
+        )}
+        {r.back && (
+          <a href={r.back} className="inline-block rounded-xl bg-stone-900 px-5 py-3 font-medium text-white">
+            Back to your table
+          </a>
         )}
       </div>
     </main>

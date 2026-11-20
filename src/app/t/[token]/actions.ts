@@ -9,6 +9,9 @@ import { DomainError } from "@/server/errors";
 import { createGuestToken, GUEST_COOKIE, GUEST_MAX_AGE_SECONDS, verifyGuestToken } from "@/server/session";
 import { submitComment, submitDishRating, submitRating } from "@/features/feedback/server/service";
 import { attachGuestCustomer, openSession, requestService, resolveGuest, submitOrder } from "@/features/guest/server/service";
+import { headers } from "next/headers";
+import { baseUrlFrom } from "@/features/payments/server/base-url";
+import { startGuestPayment } from "@/features/payments/server/guest";
 
 export interface GuestResult {
   ok?: boolean;
@@ -89,6 +92,23 @@ export async function requestServiceAction(token: string, kind: "CALL_WAITER" | 
     if (e instanceof DomainError) return { error: e.message };
     throw e;
   }
+}
+
+/**
+ * "Pay" on one bill at the table: starts an eSewa or Khalti payment for exactly what the bill comes to now, and sends the guest to the pay
+ * page. Nothing the phone sends is trusted for the amount; the bill must be at this guest's own table.
+ */
+export async function payAtTableAction(token: string, orderId: string, provider: string) {
+  let target = `/t/${token}`;
+  try {
+    const gc = await currentGuest();
+    const r = await startGuestPayment(gc, z.string().min(1).max(60).parse(orderId), provider, baseUrlFrom(await headers()));
+    target = `/pay/${r.token}`;
+  } catch (e) {
+    if (!(e instanceof DomainError)) throw e;
+    target = `/t/${token}?error=${encodeURIComponent(e.message)}`;
+  }
+  redirect(target);
 }
 
 const phoneSchema = z.object({
