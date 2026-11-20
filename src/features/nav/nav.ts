@@ -115,7 +115,9 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
       id: "settings",
       label: "Settings",
       items: [
-        ...when(can(r, "branch.manage") || can(r, "owner.control") || can(r, "print.manage"), { href: "/settings", label: "Settings", icon: "extras", description: "Business setup and connections" }),
+        { href: "/settings", label: "Settings", icon: "extras", description: "Business setup, dashboard and appearance" },
+        { href: "/settings/dashboard", label: "Dashboard settings", icon: "layout", description: "Arrange cards, pick a layout, show or hide widgets" },
+        { href: "/settings/appearance", label: "Appearance & branding", icon: "palette", description: "Light or dark, theme colour and business logo" },
         ...when(can(r, "owner.control"), { href: "/owner", label: "Owner control", icon: "reports", description: "Daily summary and things to check", badge: c.ownerAlerts, badgeTone: "alert" }),
         ...when(can(r, "owner.control"), { href: "/settings/profile", label: "Business profile", icon: "extras", description: "Name, address, logo and bill details" }),
         ...when(can(r, "owner.control"), { href: "/settings/activity", label: "Activity log", icon: "reports", description: "Who did what, and when" }),

@@ -22,6 +22,9 @@ import { NotificationWatcher } from "@/components/notification-watcher";
 import { RegisterWorker } from "@/components/register-worker";
 import { ClockWidget } from "@/components/clock-widget";
 import { myClock } from "@/features/payroll/server/time";
+import { getTheme } from "@/features/dashboard/server/preferences";
+import { accentVars } from "@/features/appearance/theme";
+import { PRODUCT_NAME } from "@/lib/product";
 import { pushPublicKey } from "@/features/notifications/server/push";
 import { subscribePushAction, unsubscribePushAction } from "./notifications/push-actions";
 
@@ -48,7 +51,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const ctx = await requireTenant();
   // A rider has their own page and sees nothing else.
   if (ctx.role === "RIDER") redirect("/deliveries");
-  const [business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting, hukkaLong, hukkaCategories, reservationsWaiting] = await Promise.all([
+  const [theme, logo, business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting, hukkaLong, hukkaCategories, reservationsWaiting] = await Promise.all([
+    getTheme(ctx),
+    db.businessLogo.findUnique({ where: { businessId: ctx.businessId }, select: { updatedAt: true } }),
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId } }),
     db.user.findUniqueOrThrow({ where: { id: ctx.userId }, select: { name: true } }),
     inboxCount(ctx),
@@ -89,27 +94,22 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const everyItem: NavItem[] = [...home, ...sections.flatMap((g) => g.items)].map((e) => ({ href: e.href, label: e.label, icon: e.icon, tone: "teal" as const, badge: e.badge, badgeTone: e.badgeTone }));
   const tabs = (PREFERRED[ctx.role] ?? PREFERRED.WAITER!).flatMap((href) => everyItem.filter((i) => i.href === href)).slice(0, 4);
 
+  // The top of the sidebar is the business: its logo, or a monogram and name when none is uploaded. Switching branch is a small selector under it.
   const brand = (
-    <Link href="/dashboard" className="flex items-center gap-2.5">
-      <span className="grid size-9 place-items-center rounded-xl bg-brand-600 text-sm font-bold text-white">R</span>
-      <span className="text-base font-semibold tracking-tight">Restaurant OS</span>
+    <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5" aria-label={`${business.name}, dashboard`}>
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/logo?v=${logo.updatedAt.getTime()}`} alt={business.name} className="brand-logo h-11 w-auto max-w-[12rem] object-contain" />
+      ) : (
+        <>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-sm font-bold text-white">{initials(business.name) || "R"}</span>
+          <span className="min-w-0 truncate text-base font-semibold tracking-tight">{business.name}</span>
+        </>
+      )}
     </Link>
   );
 
-  const top = (
-    <div className="space-y-3 rounded-2xl border border-stone-200 bg-stone-50 p-3">
-      <div className="flex items-center gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-sm font-bold text-brand-700 ring-1 ring-stone-200">
-          {initials(business.name)}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{business.name}</p>
-          {business.multiBranch && <p className="truncate text-xs text-stone-500">{myBranches.length === 1 ? myBranches[0]!.name : `${myBranches.length} branches`}</p>}
-        </div>
-      </div>
-      {business.multiBranch && myBranches.length > 1 && <BranchSwitcher action={switchBranchAction} branches={myBranches} current={ctx.branchId} />}
-    </div>
-  );
+  const top = business.multiBranch && myBranches.length > 1 ? <BranchSwitcher action={switchBranchAction} branches={myBranches} current={ctx.branchId} /> : null;
 
   const bottom = (
     <div className="space-y-2 border-t border-stone-200 pt-3">
@@ -136,12 +136,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <Icon name="logout" className="size-5 text-stone-400" /> Sign out
         </button>
       </form>
+      <p className="pt-1 text-center text-[11px] tracking-wide text-stone-400">Powered by {PRODUCT_NAME}</p>
     </div>
   );
 
   return (
+    <div data-ui={theme.mode.toLowerCase()} style={accentVars(theme.accent) as React.CSSProperties} className="min-h-screen">
     <AppShell brand={brand} top={top} nav={<NavLinks home={home} sections={sections} />} bottom={bottom} tabs={tabs} alerts={unreadNotifications.length}>
       {children}
     </AppShell>
+    </div>
   );
 }

@@ -224,3 +224,193 @@ body {
     align-items: center;
   }
 }
+
+/*
+ * Theme tokens for the staff app (everything inside [data-ui], set by the app layout from the person's saved preferences).
+ *
+ * Accent: --color-brand-* come from --accent-l-* (light) or --accent-d-* (dark), which the layout computes from one chosen colour with
+ * contrast checks (see features/appearance/theme.ts). Without them the standard indigo shows.
+ *
+ * Dark: [data-ui="dark"], or [data-ui="system"] when the device prefers dark. Dark mode only sets the --ui-* variables; the rules below
+ * read them with a fallback to the normal light colour, so light mode is exactly as before.
+ */
+[data-ui] {
+  --color-brand-50: var(--accent-l-50, #eef2ff);
+  --color-brand-100: var(--accent-l-100, #e0e7ff);
+  --color-brand-500: var(--accent-l-500, #6366f1);
+  --color-brand-600: var(--accent-l-600, #4f46e5);
+  --color-brand-700: var(--accent-l-700, #4338ca);
+  --color-brand-900: var(--accent-l-900, #312e81);
+  --chart-muted: #a8a29e;
+  --chart-grid: #e7e5e4;
+  --chart-text: #78716c;
+  background: var(--ui-bg, var(--background));
+  color: var(--ui-text, var(--foreground));
+}
+
+[data-ui="dark"] {
+  color-scheme: dark;
+  --ui-bg: #121214;
+  --ui-card: #1c1c1f;
+  --ui-card-2: #26262a;
+  --ui-card-3: #2e2e33;
+  --ui-line: #34343a;
+  --ui-line-2: #46464e;
+  --ui-text: #f4f4f5;
+  --ui-t800: #e4e4e7;
+  --ui-t700: #d4d4d8;
+  --ui-t600: #c4c4cc;
+  --ui-t500: #a8a8b2;
+  --ui-t400: #8f8f99;
+  --ui-t300: #62626b;
+  --color-brand-50: var(--accent-d-50, #25255a);
+  --color-brand-100: var(--accent-d-100, #30307a);
+  --color-brand-500: var(--accent-d-500, #818cf8);
+  --color-brand-600: var(--accent-d-600, #4f46e5);
+  --color-brand-700: var(--accent-d-700, #a5b4fc);
+  --color-brand-900: var(--accent-d-900, #c7d2fe);
+  --chart-muted: #71717a;
+  --chart-grid: #34343a;
+  --chart-text: #a8a8b2;
+}
+@media (prefers-color-scheme: dark) {
+  [data-ui="system"] {
+    color-scheme: dark;
+    --ui-bg: #121214;
+    --ui-card: #1c1c1f;
+    --ui-card-2: #26262a;
+    --ui-card-3: #2e2e33;
+    --ui-line: #34343a;
+    --ui-line-2: #46464e;
+    --ui-text: #f4f4f5;
+    --ui-t800: #e4e4e7;
+    --ui-t700: #d4d4d8;
+    --ui-t600: #c4c4cc;
+    --ui-t500: #a8a8b2;
+    --ui-t400: #8f8f99;
+    --ui-t300: #62626b;
+    --color-brand-50: var(--accent-d-50, #25255a);
+    --color-brand-100: var(--accent-d-100, #30307a);
+    --color-brand-500: var(--accent-d-500, #818cf8);
+    --color-brand-600: var(--accent-d-600, #4f46e5);
+    --color-brand-700: var(--accent-d-700, #a5b4fc);
+    --color-brand-900: var(--accent-d-900, #c7d2fe);
+    --chart-muted: #71717a;
+    --chart-grid: #34343a;
+    --chart-text: #a8a8b2;
+  }
+}
+
+/* Surfaces, lines and text read the dark variables when they exist. */
+[data-ui] .bg-white { background-color: var(--ui-card, #fff); }
+[data-ui] .bg-white\/90 { background-color: color-mix(in srgb, var(--ui-card, #fff) 90%, transparent); }
+[data-ui] .bg-white\/95 { background-color: color-mix(in srgb, var(--ui-card, #fff) 95%, transparent); }
+[data-ui] .bg-stone-50 { background-color: var(--ui-card-2, var(--color-stone-50)); }
+[data-ui] .bg-stone-100 { background-color: var(--ui-card-3, var(--color-stone-100)); }
+[data-ui] .bg-stone-200 { background-color: var(--ui-line, var(--color-stone-200)); }
+[data-ui] .hover\:bg-stone-50:hover { background-color: var(--ui-card-2, var(--color-stone-50)); }
+[data-ui] .hover\:bg-stone-100:hover { background-color: var(--ui-card-3, var(--color-stone-100)); }
+[data-ui] .border-stone-100 { border-color: var(--ui-line, var(--color-stone-100)); }
+[data-ui] .border-stone-200,
+[data-ui] .border-stone-200\/80 { border-color: var(--ui-line, var(--color-stone-200)); }
+[data-ui] .border-stone-300 { border-color: var(--ui-line-2, var(--color-stone-300)); }
+[data-ui] .divide-stone-100 > :not(:last-child) { border-color: var(--ui-line, var(--color-stone-100)); }
+[data-ui] .ring-stone-200 { --tw-ring-color: var(--ui-line, var(--color-stone-200)); }
+[data-ui] .text-stone-900 { color: var(--ui-text, var(--color-stone-900)); }
+[data-ui] .text-stone-800 { color: var(--ui-t800, var(--color-stone-800)); }
+[data-ui] .text-stone-700,
+[data-ui] .hover\:text-stone-900:hover { color: var(--ui-t700, var(--color-stone-700)); }
+[data-ui] .text-stone-600 { color: var(--ui-t600, var(--color-stone-600)); }
+[data-ui] .text-stone-500 { color: var(--ui-t500, var(--color-stone-500)); }
+[data-ui] .text-stone-400 { color: var(--ui-t400, var(--color-stone-400)); }
+[data-ui] .text-stone-300 { color: var(--ui-t300, var(--color-stone-300)); }
+[data-ui] input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+[data-ui] select,
+[data-ui] textarea {
+  background-color: var(--ui-card-2, #fff);
+  border-color: var(--ui-line-2, var(--color-stone-300));
+  color: var(--ui-text, inherit);
+}
+[data-ui] .card { background: var(--ui-card, #fff); border-color: var(--ui-line, var(--color-stone-200)); }
+[data-ui] .btn-secondary { background: var(--ui-card, #fff); border-color: var(--ui-line-2, var(--color-stone-300)); color: var(--ui-t700, var(--color-stone-700)); }
+[data-ui] .btn-secondary:hover:not(:disabled) { background: var(--ui-card-2, var(--color-stone-50)); }
+
+/* Status colours keep their meaning on dark: soft tinted boxes and readable text. */
+[data-ui="dark"] .bg-red-50, [data-ui="dark"] .bg-red-100 { background-color: rgba(239, 68, 68, 0.16); }
+[data-ui="dark"] .bg-amber-50, [data-ui="dark"] .bg-amber-100, [data-ui="dark"] .bg-orange-100 { background-color: rgba(245, 158, 11, 0.16); }
+[data-ui="dark"] .bg-emerald-50, [data-ui="dark"] .bg-emerald-100, [data-ui="dark"] .bg-green-50, [data-ui="dark"] .bg-green-100 { background-color: rgba(34, 197, 94, 0.15); }
+[data-ui="dark"] .bg-blue-100, [data-ui="dark"] .bg-sky-100, [data-ui="dark"] .bg-sky-50 { background-color: rgba(56, 189, 248, 0.15); }
+[data-ui="dark"] .bg-rose-100 { background-color: rgba(244, 63, 94, 0.16); }
+[data-ui="dark"] .text-red-700, [data-ui="dark"] .text-red-800, [data-ui="dark"] .text-red-900, [data-ui="dark"] .text-rose-900 { color: #fca5a5; }
+[data-ui="dark"] .text-amber-700, [data-ui="dark"] .text-amber-800, [data-ui="dark"] .text-amber-900, [data-ui="dark"] .text-amber-950, [data-ui="dark"] .text-orange-700, [data-ui="dark"] .text-orange-800 { color: #fcd34d; }
+[data-ui="dark"] .text-emerald-700, [data-ui="dark"] .text-emerald-800, [data-ui="dark"] .text-emerald-900, [data-ui="dark"] .text-green-800, [data-ui="dark"] .text-green-900 { color: #86efac; }
+[data-ui="dark"] .text-blue-700, [data-ui="dark"] .text-blue-800, [data-ui="dark"] .text-blue-900, [data-ui="dark"] .text-sky-700, [data-ui="dark"] .text-sky-800, [data-ui="dark"] .text-sky-900 { color: #93c5fd; }
+@media (prefers-color-scheme: dark) {
+  [data-ui="system"] .bg-red-50, [data-ui="system"] .bg-red-100 { background-color: rgba(239, 68, 68, 0.16); }
+  [data-ui="system"] .bg-amber-50, [data-ui="system"] .bg-amber-100, [data-ui="system"] .bg-orange-100 { background-color: rgba(245, 158, 11, 0.16); }
+  [data-ui="system"] .bg-emerald-50, [data-ui="system"] .bg-emerald-100, [data-ui="system"] .bg-green-50, [data-ui="system"] .bg-green-100 { background-color: rgba(34, 197, 94, 0.15); }
+  [data-ui="system"] .bg-blue-100, [data-ui="system"] .bg-sky-100, [data-ui="system"] .bg-sky-50 { background-color: rgba(56, 189, 248, 0.15); }
+  [data-ui="system"] .bg-rose-100 { background-color: rgba(244, 63, 94, 0.16); }
+  [data-ui="system"] .text-red-700, [data-ui="system"] .text-red-800, [data-ui="system"] .text-red-900, [data-ui="system"] .text-rose-900 { color: #fca5a5; }
+  [data-ui="system"] .text-amber-700, [data-ui="system"] .text-amber-800, [data-ui="system"] .text-amber-900, [data-ui="system"] .text-amber-950, [data-ui="system"] .text-orange-700, [data-ui="system"] .text-orange-800 { color: #fcd34d; }
+  [data-ui="system"] .text-emerald-700, [data-ui="system"] .text-emerald-800, [data-ui="system"] .text-emerald-900, [data-ui="system"] .text-green-800, [data-ui="system"] .text-green-900 { color: #86efac; }
+  [data-ui="system"] .text-blue-700, [data-ui="system"] .text-blue-800, [data-ui="system"] .text-blue-900, [data-ui="system"] .text-sky-700, [data-ui="system"] .text-sky-800, [data-ui="system"] .text-sky-900 { color: #93c5fd; }
+}
+
+/*
+ * Dashboard grid. Two columns on a phone, four on a desktop. Every widget carries its place for each device as variables, so one set of
+ * widgets serves both layouts. Three templates change spacing, size and decoration only; the data and widgets are the same.
+ */
+.dash-grid {
+  --dash-gap: 0.75rem;
+  --dash-pad: 1rem;
+  --dash-kpi: 1.5rem;
+  --dash-h: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dash-gap);
+  align-items: stretch;
+}
+@media (min-width: 1024px) {
+  .dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.dash-item {
+  order: var(--om, 0);
+  grid-column: span var(--sm, 1) / span var(--sm, 1);
+  min-width: 0;
+}
+.dash-item[data-hm="1"] { display: none; }
+@media (min-width: 1024px) {
+  .dash-item { order: var(--od, 0); grid-column: span var(--sd, 1) / span var(--sd, 1); }
+  .dash-item[data-hm="1"] { display: block; }
+  .dash-item[data-hd="1"] { display: none; }
+}
+.dash-card {
+  height: 100%;
+  border-radius: var(--dash-radius, 1rem);
+  background: var(--ui-card, #fff);
+  border: 1px solid var(--ui-line, var(--color-stone-200));
+  box-shadow: var(--dash-shadow, 0 1px 2px rgb(28 25 23 / 0.04));
+  padding: var(--dash-pad);
+}
+.dash-kpi { font-size: var(--dash-kpi); line-height: 1.15; }
+.dash-h { font-size: var(--dash-h); }
+
+/* Classic Business: compact and information-rich. */
+.dash-t-classic { --dash-gap: 0.75rem; --dash-pad: 1rem; --dash-kpi: 1.5rem; --dash-radius: 0.75rem; }
+/* Modern Analytics: spacious, big figures, soft depth. */
+.dash-t-modern {
+  --dash-gap: 1.25rem; --dash-pad: 1.5rem; --dash-kpi: 1.875rem; --dash-h: 1.125rem; --dash-radius: 1.5rem;
+  --dash-shadow: 0 1px 2px rgb(28 25 23 / 0.04), 0 8px 24px -8px rgb(28 25 23 / 0.1);
+}
+.dash-t-modern .dash-card { border-color: transparent; }
+@media (min-width: 640px) { .dash-t-modern { --dash-gap: 1.5rem; } }
+/* Compact Operations: dense, quiet, built for a busy counter. */
+.dash-t-compact { --dash-gap: 0.5rem; --dash-pad: 0.75rem; --dash-kpi: 1.25rem; --dash-h: 0.9375rem; --dash-radius: 0.625rem; --dash-shadow: none; }
+.dash-t-compact .dash-card ul > li { font-size: 0.8125rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui] * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+[data-ui] .brand-logo { background: #fff; border-radius: 0.5rem; padding: 0.125rem 0.25rem; }
+@media (min-width: 1280px) { .dash-t-modern { --dash-kpi: 2.25rem; } }

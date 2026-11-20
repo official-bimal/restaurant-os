@@ -8,12 +8,12 @@ import { niceMax, shortMoney, type Slice } from "@/features/reports/charts";
 const W = 640;
 const H = 220;
 const PAD = { l: 52, r: 12, t: 12, b: 28 };
-const BRAND = "#4f46e5";
-const GRID = "#e7e5e4";
+const BRAND = "var(--color-brand-600)";
+const GRID = "var(--chart-grid, #e7e5e4)";
 
 function Axes({ max, ticks = 4 }: { max: number; ticks?: number }) {
   return (
-    <g fontSize={11} fill="#78716c">
+    <g fontSize={11} fill="var(--chart-text, #78716c)">
       {Array.from({ length: ticks + 1 }, (_, i) => {
         const v = (max / ticks) * i;
         const y = PAD.t + (H - PAD.t - PAD.b) * (1 - i / ticks);
@@ -48,7 +48,7 @@ export function BarChart({ values, labels, labelEvery = 1, ariaLabel }: { values
               <title>{`${labels[i]}: ${shortMoney(v)}`}</title>
             </rect>
             {i % labelEvery === 0 && (
-              <text x={x + bar / 2} y={H - 8} textAnchor="middle" fontSize={11} fill="#78716c">
+              <text x={x + bar / 2} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--chart-text, #78716c)">
                 {labels[i]}
               </text>
             )}
@@ -76,7 +76,7 @@ export function LineChart({ series, labels, ariaLabel }: { series: LineSeries[];
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel} className="h-auto w-full">
       <Axes max={max} />
       {labels.map((l, i) => (
-        <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize={11} fill="#78716c">
+        <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--chart-text, #78716c)">
           {l}
         </text>
       ))}
@@ -84,7 +84,7 @@ export function LineChart({ series, labels, ariaLabel }: { series: LineSeries[];
         <g key={s.name}>
           <polyline points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke={s.color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={s.dashed ? "6 5" : undefined} />
           {s.values.map((v, i) => (
-            <circle key={i} cx={x(i)} cy={y(v)} r={4} fill="#fff" stroke={s.color} strokeWidth={2}>
+            <circle key={i} cx={x(i)} cy={y(v)} r={4} fill="var(--ui-card, #fff)" stroke={s.color} strokeWidth={2}>
               <title>{`${s.name}, ${labels[i]}: ${shortMoney(v)}`}</title>
             </circle>
           ))}
@@ -94,7 +94,7 @@ export function LineChart({ series, labels, ariaLabel }: { series: LineSeries[];
   );
 }
 
-const SLICE_COLORS = ["#4f46e5", "#f59e0b", "#10b981", "#ef4444", "#a8a29e"];
+const SLICE_COLORS = ["var(--color-brand-600)", "#f59e0b", "#10b981", "#ef4444", "#a8a29e"];
 
 /** A ring split by share, with the biggest share first and a legend beside it. */
 export function Donut({ slices, centre, ariaLabel, format }: { slices: Slice[]; centre: string; ariaLabel: string; format: (paisa: number) => string }) {
@@ -114,10 +114,10 @@ export function Donut({ slices, centre, ariaLabel, format }: { slices: Slice[]; 
             </circle>
           );
         })}
-        <text x={70} y={66} textAnchor="middle" fontSize={11} fill="#78716c">
+        <text x={70} y={66} textAnchor="middle" fontSize={11} fill="var(--chart-text, #78716c)">
           Total
         </text>
-        <text x={70} y={84} textAnchor="middle" fontSize={15} fontWeight={700} fill="#1c1917">
+        <text x={70} y={84} textAnchor="middle" fontSize={15} fontWeight={700} fill="var(--ui-text, #1c1917)">
           {centre}
         </text>
       </svg>

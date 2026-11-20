@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { PRODUCT_NAME } from "@/lib/product";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Restaurant OS",
+  title: PRODUCT_NAME,
   description: "Orders, kitchen and billing for restaurants and cafes.",
   // Lets iPhone open it as an app from the home screen, which is what allows alerts there.
-  appleWebApp: { capable: true, title: "Restaurant OS", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: PRODUCT_NAME, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = { themeColor: "#4f46e5", viewportFit: "cover" };

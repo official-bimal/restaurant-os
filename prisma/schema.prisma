@@ -133,6 +133,7 @@ model User {
   id                 String             @id @default(cuid())
   notificationReads  NotificationRead[]
   pushSubscriptions  PushSubscription[]
+  preferences        UserPreference[]
   timeEntries        TimeEntry[]
   email              String             @unique
   name               String
@@ -164,6 +165,8 @@ model Business {
   website                   String?
   facebook                  String?
   instagram                 String?
+  /// The business default accent colour (#rrggbb). A person can choose their own in Appearance.
+  brandAccent               String?
   timezone                  String   @default("Asia/Kathmandu")
   /// Shows the branch switcher, branch reports and the Branches page. Off for a single-location business, so the menus stay simple.
   multiBranch               Boolean  @default(false)
@@ -216,6 +219,7 @@ model Business {
   stations         Station[]
   auditEvents      AuditEvent[]
   customRoles      CustomRole[]
+  preferences      UserPreference[]
   logo             BusinessLogo?
   trash            TrashItem[]
   tableSessions    TableSession[]
@@ -2640,5 +2644,27 @@ model CustomRole {
   members  Membership[]
 
   @@unique([businessId, name])
+  @@index([businessId])
+}
+
+/// One person's own look and dashboard in one business: light/dark mode, accent colour, dashboard template and layout.
+/// Kept on the server so it follows them to every device. Business-wide branding (logo, default colour) is on Business.
+model UserPreference {
+  userId            String
+  businessId        String
+  /// LIGHT, DARK or SYSTEM.
+  themeMode         String   @default("SYSTEM")
+  /// Personal accent colour (#rrggbb), or null to use the business colour.
+  accent            String?
+  /// CLASSIC, MODERN or COMPACT.
+  dashboardTemplate String   @default("CLASSIC")
+  /// Structured layout: { v, desktop: { order: [{ id, size }], hidden: [id] }, mobile: { ... } }. Null: the template default.
+  dashboardLayout   Json?
+  updatedAt         DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([userId, businessId])
   @@index([businessId])
 }
