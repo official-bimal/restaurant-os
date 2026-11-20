@@ -156,6 +156,30 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
         )}
       </div>
 
+      {canRestructure && options && order.tableId && (
+        <details className="card p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Change table: the customers moved</summary>
+          {options.freeTables.length === 0 ? (
+            <p className="mt-2 text-sm text-stone-500">No free table right now.</p>
+          ) : (
+            <form action={moveTableAction.bind(null, order.id)} className="mt-3 flex flex-wrap items-end gap-3 text-sm">
+              <label className="font-medium">
+                New table
+                <select name="tableId" required className="mt-1 block rounded-lg border border-stone-300 px-3 py-2">
+                  {options.freeTables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.area.name} · {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="btn-primary">Move to this table</button>
+              <p className="w-full text-xs text-stone-500">Everything on this table moves with them, every bill. Guests who ordered by phone must scan the new table&apos;s QR code.</p>
+            </form>
+          )}
+        </details>
+      )}
+
       {displays.length > 0 && order.status !== "CANCELLED" && order.status !== "MERGED" && (
         <CustomerDisplayBar screens={displays.map((d) => ({ id: d.id, name: d.name, token: d.token }))} orderId={order.id} branchId={ctx.branchId} options={displayOptions} hasQr={!!displaySetting?.hasQr} />
       )}

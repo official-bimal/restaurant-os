@@ -1,3 +1,4 @@
+import { sortNatural } from "@/lib/natural";
 import { db } from "@/server/db";
 import type { TenantContext } from "@/server/auth";
 import { can } from "@/server/permissions";
@@ -45,7 +46,7 @@ async function assertNameFree(
 }
 
 export async function getFloorAdmin(ctx: TenantContext) {
-  return db.area.findMany({
+  const areas = await db.area.findMany({
     where: scope(ctx),
     include: {
       tables: {
@@ -55,6 +56,8 @@ export async function getFloorAdmin(ctx: TenantContext) {
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
+  // Tables in counting order (T1, T2 ... T10), not letter order (T1, T10, T2).
+  return areas.map((a) => ({ ...a, tables: sortNatural(a.tables, (t) => t.label) }));
 }
 
 export async function createArea(ctx: TenantContext, rawName: string) {

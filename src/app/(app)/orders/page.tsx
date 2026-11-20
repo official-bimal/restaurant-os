@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function OrdersPage({ searchParams }: PageProps<"/orders">) {
   const ctx = await requireTenant();
-  const { error } = await searchParams;
+  const { error, moved } = await searchParams;
   const [orders, tables, zones, bands] = await Promise.all([listOpenOrders(ctx), listTables(ctx), activeZones(ctx), activeBands(ctx)]);
   // One key per page render: a double tap submits the same key, so only one order is made.
   const idempotencyKey = randomUUID();
@@ -55,10 +55,23 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
         </p>
       )}
 
+      {typeof moved === "string" && (
+        <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-900">
+          {moved.slice(0, 80)}
+        </p>
+      )}
+
       {tables.length > 0 && (
         <section aria-label="Tables" className="card p-4">
-          <h2 className="mb-3 text-lg font-semibold">Tables</h2>
-          <TableMap areas={areas} keyBase={idempotencyKey} canCreate={can(ctx, "order.create")} />
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h2 className="mr-auto text-lg font-semibold">Tables</h2>
+            {can(ctx, "floor.manage") && (
+              <Link href="/tables/layout" className="min-h-9 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-50">
+                Arrange tables
+              </Link>
+            )}
+          </div>
+          <TableMap areas={areas} keyBase={idempotencyKey} canCreate={can(ctx, "order.create")} canMove={can(ctx, "order.restructure")} />
         </section>
       )}
 

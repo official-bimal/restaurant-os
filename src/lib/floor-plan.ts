@@ -22,6 +22,24 @@ export function defaultPosition(index: number, count: number): { x: number; y: n
   return { x: clampPos(x), y: clampPos(y) };
 }
 
+/**
+ * A neat grid for `count` tables with `perRow` in each row, filled left to right then top to bottom, so tables in counting order read
+ * 1 2 3 across. perRow 0 means "choose a sensible number".
+ */
+export function gridPositions(count: number, perRow: number): { x: number; y: number }[] {
+  const cols = perRow >= 1 ? Math.min(Math.floor(perRow), Math.max(1, count)) : Math.max(1, Math.min(count, Math.ceil(Math.sqrt(count * 1.5))));
+  const rows = Math.max(1, Math.ceil(count / cols));
+  return Array.from({ length: count }, (_, i) => ({
+    x: clampPos(((i % cols) + 0.5) / cols * (PLAN_MAX - PLAN_MIN) + PLAN_MIN),
+    y: clampPos((Math.floor(i / cols) + 0.5) / rows * (PLAN_MAX - PLAN_MIN) + PLAN_MIN),
+  }));
+}
+
+/** Snap a position to the grid so tables line up; step 25 is a quarter of a tenth of the plan. */
+export function snap(v: number, step = 25): number {
+  return clampPos(Math.round(v / step) * step);
+}
+
 export interface Placed {
   id: string;
   posX: number | null;

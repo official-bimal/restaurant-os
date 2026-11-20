@@ -37,3 +37,15 @@ export async function splitAction(orderId: string, formData: FormData) {
   revalidatePath("/orders", "layout");
   redirect(`/orders/${created.id}`);
 }
+
+/** Move a party from the floor map: the order is any one at the table; every open bill there moves. Back to the floor map with a note. */
+export async function moveFromFloorAction(formData: FormData) {
+  const ctx = await requireTenant("order.restructure");
+  const orderId = z.string().min(1).max(60).parse(formData.get("orderId"));
+  const tableId = z.string().min(1).max(60).parse(formData.get("tableId"));
+  const label = (k: string) => String(formData.get(k) ?? "").replace(/[^\p{L}\p{N} ._-]/gu, "").slice(0, 30);
+  await guarded("/orders", () => moveToTable(ctx, orderId, tableId));
+  revalidatePath("/orders", "layout");
+  const note = label("fromLabel") && label("toLabel") ? `Moved ${label("fromLabel")} to ${label("toLabel")}.` : "Moved.";
+  redirect(`/orders?moved=${encodeURIComponent(note)}`);
+}

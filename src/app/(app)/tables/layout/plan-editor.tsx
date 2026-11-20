@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { TableDrawing } from "@/components/table-drawing";
-import { clampPos, defaultPosition, planWidthPercent, resolvePlan } from "@/lib/floor-plan";
+import { clampPos, defaultPosition, gridPositions, planWidthPercent, resolvePlan, snap } from "@/lib/floor-plan";
 import { savePlanAction } from "./actions";
 
 export interface EditTable {
@@ -30,6 +30,8 @@ function AreaPlan({ area }: { area: EditArea }) {
   const [pending, start] = useTransition();
   const canvas = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string } | null>(null);
+  const [snapOn, setSnapOn] = useState(true);
+  const [perRow, setPerRow] = useState(0);
 
   const move = (id: string, x: number, y: number) => {
     setPos((p) => ({ ...p, [id]: { x: clampPos(x), y: clampPos(y) } }));
@@ -44,7 +46,9 @@ function AreaPlan({ area }: { area: EditArea }) {
   const onMove = (e: React.PointerEvent) => {
     if (!drag.current || !canvas.current) return;
     const r = canvas.current.getBoundingClientRect();
-    move(drag.current.id, ((e.clientX - r.left) / r.width) * 1000, ((e.clientY - r.top) / r.height) * 1000);
+    const x = ((e.clientX - r.left) / r.width) * 1000;
+    const y = ((e.clientY - r.top) / r.height) * 1000;
+    move(drag.current.id, snapOn ? snap(x) : x, snapOn ? snap(y) : y);
   };
   const onUp = () => {
     drag.current = null;
@@ -60,7 +64,9 @@ function AreaPlan({ area }: { area: EditArea }) {
   };
 
   const tidy = () => {
-    setPos(Object.fromEntries(area.tables.map((t, i) => [t.id, defaultPosition(i, area.tables.length)])));
+    // Counting order (T1, T2, T3 ...) left to right, row by row.
+    const grid = gridPositions(area.tables.length, perRow);
+    setPos(Object.fromEntries(area.tables.map((t, i) => [t.id, grid[i]!])));
     setDirty(true);
     setNote(null);
   };
@@ -101,7 +107,7 @@ function AreaPlan({ area }: { area: EditArea }) {
             onPointerUp={onUp}
             onPointerCancel={onUp}
             className="relative aspect-[4/3] min-h-[320px] w-full touch-none select-none overflow-hidden rounded-2xl bg-stone-100 ring-1 ring-stone-200"
-            style={{ backgroundImage: "linear-gradient(#e7e5e4 1px, transparent 1px), linear-gradient(90deg, #e7e5e4 1px, transparent 1px)", backgroundSize: "10% 10%" }}
+            style={{ backgroundImage: "linear-gradient(var(--chart-grid, #e7e5e4) 1px, transparent 1px), linear-gradient(90deg, var(--chart-grid, #e7e5e4) 1px, transparent 1px)", backgroundSize: "10% 10%" }}
           >
             {area.tables.map((t) => {
               const at = pos[t.id]!;
@@ -126,12 +132,28 @@ function AreaPlan({ area }: { area: EditArea }) {
               {note.text}
             </p>
           )}
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={snapOn} onChange={(e) => setSnapOn(e.target.checked)} className="size-4" /> Snap to the grid so tables line up
+            </label>
+            <label className="flex items-center gap-2">
+              Tables per row when tidying
+              <select value={perRow} onChange={(e) => setPerRow(Number(e.target.value))} className="rounded-lg px-2 py-1.5">
+                <option value={0}>Automatic</option>
+                {[2, 3, 4, 5, 6, 8].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={save} disabled={pending || !dirty} className="min-h-11 rounded-lg bg-brand-600 px-5 font-medium text-white disabled:opacity-50">
               {pending ? "Saving…" : "Save plan"}
             </button>
             <button type="button" onClick={tidy} disabled={pending} className="min-h-11 rounded-lg border border-stone-300 px-4 text-sm">
-              Tidy into a grid
+              Tidy in order (1, 2, 3 …)
             </button>
             <button type="button" onClick={clear} disabled={pending} className="min-h-11 rounded-lg border border-stone-300 px-4 text-sm text-red-700">
               Clear plan (back to rows)

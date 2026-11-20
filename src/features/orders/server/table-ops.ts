@@ -1,3 +1,4 @@
+import { naturalCompare } from "@/lib/natural";
 import { db } from "@/server/db";
 import type { TenantContext } from "@/server/auth";
 import { can } from "@/server/permissions";
@@ -48,8 +49,11 @@ export async function listRestructureOptions(ctx: TenantContext, orderId: string
       orderBy: { number: "asc" },
     }),
   ]);
+  const rank = new Map<string, number>();
+  for (const t of tables) if (!rank.has(t.areaId)) rank.set(t.areaId, rank.size);
+  const free = tables.sort((a, b) => rank.get(a.areaId)! - rank.get(b.areaId)! || naturalCompare(a.label, b.label));
   return {
-    freeTables: order.tableId ? tables.filter((t) => t.id !== order.tableId) : [],
+    freeTables: order.tableId ? free.filter((t) => t.id !== order.tableId) : [],
     mergeTargets: openOrders.map((o) => ({
       id: o.id,
       number: o.number,

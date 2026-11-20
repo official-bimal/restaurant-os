@@ -1,3 +1,4 @@
+import { sortNatural } from "@/lib/natural";
 import { db } from "@/server/db";
 import type { TenantContext } from "@/server/auth";
 import { can } from "@/server/permissions";
@@ -93,7 +94,7 @@ export async function listReservations(ctx: TenantContext, date: string) {
     db.branch.findFirstOrThrow({ where: { id: branchId, businessId }, select: { reservationsEnabled: true, onlineToken: true } }),
     db.business.findUniqueOrThrow({ where: { id: businessId }, select: { name: true } }),
   ]);
-  return { rows, tables, enabled: branch.reservationsEnabled, publicToken: branch.onlineToken, businessName: biz.name };
+  return { rows, tables: sortNatural(tables, (t) => t.label), enabled: branch.reservationsEnabled, publicToken: branch.onlineToken, businessName: biz.name };
 }
 
 export async function reservationsWaitingCount(ctx: TenantContext): Promise<number> {

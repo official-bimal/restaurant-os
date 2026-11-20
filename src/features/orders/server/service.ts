@@ -4,6 +4,7 @@ import { resolveStamp } from "@/features/loyalty/server/stamps";
 import { evaluateDeal } from "@/features/billing/server/deals";
 import { combineDiscount } from "@/features/billing/deals";
 import { cleanBuyer } from "@/features/billing/ird";
+import { naturalCompare } from "@/lib/natural";
 import { db } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { audit, type Tx } from "@/server/audit";
@@ -66,11 +67,15 @@ export async function getOrder(ctx: TenantContext, orderId: string) {
 }
 
 export async function listTables(ctx: TenantContext) {
-  return db.diningTable.findMany({
+  const tables = await db.diningTable.findMany({
     where: scope(ctx),
     include: { area: true },
     orderBy: [{ area: { sortOrder: "asc" } }, { label: "asc" }],
   });
+  // Area by area, and inside an area in counting order (T1, T2 ... T10), not letter order (T1, T10, T2).
+  const rank = new Map<string, number>();
+  for (const t of tables) if (!rank.has(t.area.id)) rank.set(t.area.id, rank.size);
+  return tables.sort((a, b) => rank.get(a.area.id)! - rank.get(b.area.id)! || naturalCompare(a.label, b.label));
 }
 
 /**
