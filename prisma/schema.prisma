@@ -220,6 +220,8 @@ model Business {
   auditEvents      AuditEvent[]
   customRoles      CustomRole[]
   printers         Printer[]
+  displaySetting   DisplaySetting?
+  displays         CustomerDisplay[]
   preferences      UserPreference[]
   logo             BusinessLogo?
   trash            TrashItem[]
@@ -1164,6 +1166,7 @@ model Branch {
   transfersOut        StockTransfer[]      @relation("TransferFrom")
   transfersIn         StockTransfer[]      @relation("TransferTo")
   printers            Printer[]
+  displays            CustomerDisplay[]
   menuSchedules       MenuSchedule[]
   /// Menu set chosen by hand for this branch. Null: follow the schedule, or the whole menu when none applies.
   activeMenuSetId     String?
@@ -2715,5 +2718,53 @@ model PrintRoute {
   printer Printer @relation(fields: [printerId], references: [id], onDelete: Cascade)
 
   @@unique([branchId, kind, stationKey])
+  @@index([businessId, branchId])
+}
+
+/// The customer-facing display's look and content, for the whole business: welcome and thank-you messages, whether item notes show, and an
+/// optional fixed payment QR (a Fonepay or bank sticker) to show beside the total.
+model DisplaySetting {
+  businessId    String   @id
+  enabled       Boolean  @default(false)
+  welcomeTitle  String?
+  welcomeText   String?
+  thanksText    String?
+  /// How long the thank-you screen stays after a bill is paid.
+  thanksSeconds Int      @default(12)
+  showNotes     Boolean  @default(true)
+  showLogo      Boolean  @default(true)
+  /// Show the fixed QR beside the total whenever a bill is on the screen (otherwise the cashier shows it with a button).
+  autoQr        Boolean  @default(false)
+  qrLabel       String?
+  qrContentType String?
+  qrBytes       Int?
+  qrData        Bytes?
+  updatedAt     DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+/// One customer-facing screen at a branch (a second monitor at the counter, a tablet, or the till laptop shown to the customer). The screen
+/// opens a secret link (the token) with no login. The till points it at the order being rung up and the options chosen for the bill.
+model CustomerDisplay {
+  id         String    @id @default(cuid())
+  businessId String
+  branchId   String
+  name       String
+  /// The secret in the screen's link. Make a new one to cut off a screen that should no longer work.
+  token      String    @unique
+  /// The order it shows now, with the bill options the cashier has chosen (discount, reward points, stamp), or null for the idle screen.
+  orderId    String?
+  options    Json?
+  /// The cashier has asked for the fixed payment QR to be shown.
+  showQr     Boolean   @default(false)
+  /// The till checks in while an order is open; a screen not updated for a minute goes back to idle.
+  followedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([branchId, name])
   @@index([businessId, branchId])
 }

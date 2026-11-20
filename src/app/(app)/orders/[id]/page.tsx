@@ -6,6 +6,8 @@ import { checkoutMethods, listBillIntents } from "@/features/payments/server/ser
 import { getStampOptions } from "@/features/loyalty/server/stamps";
 import { PrintMenu } from "@/components/print-menu";
 import { OrderMenu } from "./order-menu";
+import { CustomerDisplayBar } from "./customer-display-bar";
+import { getSetting as getDisplaySetting, listDisplays } from "@/features/display/server/service";
 import { CustomerOsPoints } from "@/features/customeros/points";
 import { listBillRewards, rewardUsedOnBill } from "@/features/customeros/server/reward";
 import { getPrintConfig } from "@/features/printing/server/settings";
@@ -111,6 +113,16 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
   const hasFood = order.items.some((i) => i.status !== "CANCELLED");
   const canCancel = !closed && can(ctx, hasFood ? "order.void" : "order.edit");
   const printCfg = await getPrintConfig(ctx.businessId);
+  // The customer display: shown to the cashier only when the business uses it and this branch has a screen.
+  const displaySetting = can(ctx, "bill.checkout") ? await getDisplaySetting(ctx.businessId) : null;
+  const displays = displaySetting?.enabled ? await listDisplays(ctx) : [];
+  const displayOptions = {
+    discountPercent: discountPct,
+    redeemPoints: redeemBlocks > 0 && loyalty ? redeemBlocks * loyalty.settings.redeemPoints : 0,
+    rewardValueMinor: chosenReward ? rewardValue : 0,
+    stampProgramId: chosenStamp?.programId ?? null,
+    stampItemId: chosenStamp && stampItem ? stampItem.orderItemId : null,
+  };
   const queueButton = (kind: string, id: string) => (
     <form action={queuePrintAction.bind(null, kind, id, order.id)}>
       <button className="min-h-9 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium hover:bg-stone-50">Send to printer queue</button>
@@ -143,6 +155,10 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
           <PrintMenu kind="kitchen" id={order.id} label="Print kitchen ticket" queue={queueButton("kitchen", order.id)} defaultWidthMm={printCfg.paperWidthMm} defaultHeightMm={printCfg.paperHeightMm} className="ml-auto" />
         )}
       </div>
+
+      {displays.length > 0 && order.status !== "CANCELLED" && order.status !== "MERGED" && (
+        <CustomerDisplayBar screens={displays.map((d) => ({ id: d.id, name: d.name, token: d.token }))} orderId={order.id} branchId={ctx.branchId} options={displayOptions} hasQr={!!displaySetting?.hasQr} />
+      )}
 
       {order.status === "MERGED" && (
         <p className="rounded-lg bg-stone-100 p-3 text-sm text-stone-700">

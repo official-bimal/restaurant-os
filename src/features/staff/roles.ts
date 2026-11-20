@@ -72,6 +72,7 @@ export const PERMISSION_GROUPS: { title: string; items: { key: Permission; label
       { key: "payroll.manage", label: "Payroll" },
       { key: "branch.manage", label: "Branches and several-branch setting" },
       { key: "print.manage", label: "Printing settings" },
+      { key: "display.manage", label: "Customer display settings" },
     ],
   },
 ];

@@ -123,6 +123,7 @@ export function buildNav(i: NavInput): { home: NavEntry[]; sections: NavSection[
         ...when(can(r, "owner.control"), { href: "/settings/activity", label: "Activity log", icon: "reports", description: "Who did what, and when" }),
         ...when(can(r, "menu.manage"), { href: "/settings/trash", label: "Trash", icon: "menu", description: "Put back dishes you deleted" }),
         ...when(can(r, "owner.control"), { href: "/settings/payments", label: "Payments", icon: "bills", description: "eSewa, Khalti and other ways customers pay" }),
+        ...when(can(r, "display.manage"), { href: "/settings/display", label: "Customer display", icon: "dashboard", description: "A screen showing the customer their bill and the QR to pay" }),
         ...when(can(r, "print.manage"), { href: "/printing", label: "Printing", icon: "bills", description: "Receipt and kitchen printers" }),
         ...when(can(r, "owner.control"), { href: "/customer-os", label: "Customer OS", icon: "customers", description: "Link to your customer and loyalty system" }),
         ...when(can(r, "branch.manage") && i.multiBranch, { href: "/branches", label: "Branches", icon: "branches", description: "Your locations" }),

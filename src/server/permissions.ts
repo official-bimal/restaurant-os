@@ -36,11 +36,12 @@ export type Permission =
   | "books.manage"
   | "drawer.use"
   | "drawer.review"
+  | "display.manage"
   | "owner.control";
 
 const MATRIX: Record<Role, readonly Permission[]> = {
-  OWNER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "day.reopen", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "branch.manage", "rider.settle", "supplier.pay", "time.manage", "payroll.manage", "message.send", "print.manage", "books.view", "books.manage", "drawer.use", "drawer.review", "owner.control"],
-  MANAGER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "rider.settle", "supplier.pay", "time.manage", "print.manage", "books.view", "drawer.use", "drawer.review"],
+  OWNER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "day.reopen", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "branch.manage", "rider.settle", "supplier.pay", "time.manage", "payroll.manage", "message.send", "print.manage", "books.view", "books.manage", "drawer.use", "drawer.review", "display.manage", "owner.control"],
+  MANAGER: ["order.create", "order.edit", "order.cancelItem", "kitchen.update", "bill.checkout", "menu.manage", "floor.manage", "staff.manage", "customer.use", "customer.manage", "order.restructure", "order.void", "bill.refund", "bills.view", "report.view", "day.close", "feedback.view", "stock.view", "stock.manage", "stock.waste", "campaign.manage", "rider.settle", "supplier.pay", "time.manage", "print.manage", "books.view", "drawer.use", "drawer.review", "display.manage"],
   CASHIER: ["order.create", "order.edit", "bill.checkout", "customer.use", "order.restructure", "bills.view", "rider.settle", "drawer.use"],
   WAITER: ["order.create", "order.edit"],
   KITCHEN: ["kitchen.update", "stock.view", "stock.waste"],
