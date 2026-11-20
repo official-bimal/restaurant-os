@@ -6,7 +6,8 @@ import { db } from "@/server/db";
 import { addDays, isValidDate, localDate } from "@/lib/business-day";
 import { confirmationText, declineText, whatsappLink } from "@/features/reservations/reservations";
 import { listReservations } from "@/features/reservations/server/service";
-import { createReservationAction, reservationStatusAction, reservationsOpenAction } from "./actions";
+import { tableChoices, type TableChoice } from "@/features/reservations/reservations";
+import { createReservationAction, reservationStatusAction, reservationTableAction, reservationsOpenAction, seatReservationAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,20 @@ const TONE = {
 } as const;
 const LABEL = { REQUESTED: "Waiting for you", CONFIRMED: "Confirmed", SEATED: "Seated", CANCELLED: "Cancelled", NO_SHOW: "Did not come" } as const;
 
+/** The tables as choices for one booking: how many seats, whether big enough, and who else holds it around that time. */
+function TableOptions({ choices, seating = false }: { choices: TableChoice[]; seating?: boolean }) {
+  return (
+    <>
+      {choices.map((t) => (
+        // When seating, a table held for someone else later is still allowed (they may be late); it is just labelled.
+        <option key={t.id} value={t.id} disabled={!seating && !t.free}>
+          {t.label} ({t.capacity} seats){!t.fits ? " · too small" : ""}{!t.free ? ` · held ${t.heldAt} for ${t.heldBy}` : ""}
+        </option>
+      ))}
+    </>
+  );
+}
+
 export default async function ReservationsPage({ searchParams }: PageProps<"/reservations">) {
   const ctx = await requireTenant("order.edit");
   const sp = await searchParams;
@@ -28,6 +43,8 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
   const date = typeof sp.date === "string" && isValidDate(sp.date) ? sp.date : today;
   const { rows, tables, enabled, publicToken, businessName } = await listReservations(ctx, date);
   const tableLabel = new Map(tables.map((t) => [t.id, t.label]));
+  // Who holds which table today, so each booking can show which tables are free for it.
+  const booked = rows.flatMap((r) => (r.tableId && (r.status === "CONFIRMED" || r.status === "SEATED") ? [{ id: r.id, tableId: r.tableId, date: r.date, time: r.time, name: r.name }] : []));
   const owner = can(ctx, "branch.manage");
   return (
     <div className="space-y-4">
@@ -118,21 +135,39 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
                     <form action={reservationStatusAction.bind(null, r.id, "CONFIRMED", date)} className="flex items-end gap-2">
                       <label className="text-xs">
                         Table
-                        <select name="tableId" defaultValue={r.tableId ?? ""} className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                        <select name="tableId" defaultValue={r.tableId ?? "auto"} className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                          <option value="auto">Pick the best free table</option>
                           <option value="">No table yet</option>
-                          {tables.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.label} ({t.capacity})
-                            </option>
-                          ))}
+                          <TableOptions choices={tableChoices(tables, booked, r)} />
                         </select>
                       </label>
                       <button className="min-h-9 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white">Confirm</button>
                     </form>
                   )}
+                  {r.status === "CONFIRMED" && date === today && (
+                    <form action={seatReservationAction.bind(null, r.id, date)} className="flex items-end gap-2">
+                      <label className="text-xs">
+                        Seat at
+                        <select name="tableId" defaultValue={r.tableId ?? ""} required className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                          {!r.tableId && <option value="">Choose a table</option>}
+                          <TableOptions choices={tableChoices(tables, booked, r)} seating />
+                        </select>
+                      </label>
+                      <button className="min-h-9 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white">Seat them and open the order</button>
+                    </form>
+                  )}
+                  {r.status === "CONFIRMED" && date !== today && <p className="text-xs text-stone-500">Seat them on the day.</p>}
                   {r.status === "CONFIRMED" && (
-                    <form action={reservationStatusAction.bind(null, r.id, "SEATED", date)}>
-                      <button className="min-h-9 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white">Seated</button>
+                    <form action={reservationTableAction.bind(null, r.id, date)} className="flex items-end gap-2">
+                      <label className="text-xs">
+                        Change table
+                        <select name="tableId" defaultValue={r.tableId ?? ""} className="mt-1 block rounded-lg border border-stone-300 px-2 py-1.5 text-sm">
+                          <option value="auto">Pick the best free table</option>
+                          <option value="">No table</option>
+                          <TableOptions choices={tableChoices(tables, booked, r)} />
+                        </select>
+                      </label>
+                      <button className="min-h-9 rounded-lg border border-stone-300 px-3 text-sm">Save</button>
                     </form>
                   )}
                   {r.status === "CONFIRMED" && (

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireTenant } from "@/server/auth";
 import { guarded } from "@/server/guarded";
-import { createReservation, setReservationStatus, setReservationsEnabled } from "@/features/reservations/server/service";
+import { createReservation, seatReservation, setReservationStatus, setReservationTable, setReservationsEnabled } from "@/features/reservations/server/service";
 
 const id = z.string().min(1).max(60);
 const STATUS = z.enum(["CONFIRMED", "CANCELLED", "SEATED", "NO_SHOW"]);
@@ -37,6 +37,21 @@ export async function reservationStatusAction(reservationId: string, status: str
   const to = STATUS.parse(status);
   const r = await guarded(`/reservations?date=${date}`, () => setReservationStatus(ctx, id.parse(reservationId), to, { tableId: String(formData.get("tableId") ?? "") || undefined }));
   back(date, `&sms=${r.sms}${r.message ? `&smsError=${encodeURIComponent(r.message)}` : ""}`);
+}
+
+/** The party has arrived: start their order on the table and go straight to it. */
+export async function seatReservationAction(reservationId: string, date: string, formData: FormData) {
+  const ctx = await requireTenant();
+  const seated = await guarded(`/reservations?date=${date}`, () => seatReservation(ctx, id.parse(reservationId), String(formData.get("tableId") ?? "") || undefined));
+  revalidatePath("/reservations");
+  revalidatePath("/orders");
+  redirect(`/orders/${seated.orderId}`);
+}
+
+export async function reservationTableAction(reservationId: string, date: string, formData: FormData) {
+  const ctx = await requireTenant();
+  await guarded(`/reservations?date=${date}`, () => setReservationTable(ctx, id.parse(reservationId), String(formData.get("tableId") ?? "") || null));
+  back(date);
 }
 
 export async function reservationsOpenAction(enabled: boolean, date: string) {

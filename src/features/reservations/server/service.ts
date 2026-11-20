@@ -9,7 +9,8 @@ import { normalizePhone } from "@/server/phone";
 import { randomKey } from "@/lib/random-key";
 import { isValidDate, localDate } from "@/lib/business-day";
 import { getProvider } from "@/features/messaging/providers";
-import { bookingProblem, canMove, clash, confirmationText, declineText, type ReservationStatus } from "../reservations";
+import { createOrder } from "@/features/orders/server/service";
+import { HOLD_MINUTES, bestTable, bookingProblem, canMove, clash, confirmationText, declineText, floorReservations, tableChoices, toMinutes, type FloorReservation, type ReservationStatus } from "../reservations";
 
 /**
  * Table reservations. A guest asks from the branch's public page; staff confirm, decline, seat or mark no-show, or take a booking over the phone.
@@ -21,7 +22,7 @@ function need(ctx: TenantContext) {
   if (!can(ctx, "order.edit")) throw new DomainError("You do not have permission to handle reservations.");
 }
 
-function nowIn(timezone: string) {
+export function nowIn(timezone: string) {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" }).formatToParts(now);
   const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
@@ -138,6 +139,99 @@ async function assertTableFree(tx: Pick<typeof db, "diningTable" | "reservation"
   if (c) throw new DomainError(`${table.label} is already booked for ${c.name} at ${c.time}. Choose another table or time.`);
 }
 
+/** The value the table picker sends for "pick one for me". */
+export const AUTO_TABLE = "auto";
+
+/** The smallest free table that fits the party at that time. Throws when there is none, so the person chooses. */
+async function autoTable(tx: Pick<typeof db, "diningTable" | "reservation">, businessId: string, branchId: string, r: { id: string; date: string; time: string; partySize: number }): Promise<string> {
+  const [tables, booked] = await Promise.all([
+    tx.diningTable.findMany({ where: { businessId, branchId }, select: { id: true, label: true, capacity: true } }),
+    tx.reservation.findMany({ where: { businessId, branchId, date: r.date, tableId: { not: null }, status: { in: ["CONFIRMED", "SEATED"] } }, select: { id: true, tableId: true, date: true, time: true, name: true } }),
+  ]);
+  const pick = bestTable(tableChoices(sortNatural(tables, (t) => t.label), booked.map((b) => ({ ...b, tableId: b.tableId! })), r));
+  if (!pick) throw new DomainError(`No table for ${r.partySize} is free at ${r.time}. Pick a table yourself, or confirm without one.`);
+  return pick.id;
+}
+
+/** Give a confirmed booking another table (or none), checking that it is not held for someone else around the same time. */
+export async function setReservationTable(ctx: TenantContext, id: string, tableId: string | null) {
+  need(ctx);
+  const { businessId, branchId } = scope(ctx);
+  await db.$transaction(async (tx) => {
+    const cur = await tx.reservation.findFirst({ where: { id, businessId, branchId } });
+    if (!cur) throw new DomainError("Booking not found.");
+    if (cur.status !== "REQUESTED" && cur.status !== "CONFIRMED") throw new DomainError("This booking can no longer be given another table.");
+    let target: string | null = tableId || null;
+    if (tableId === AUTO_TABLE) target = await autoTable(tx, businessId, branchId, cur);
+    // A request nobody has confirmed yet holds no table, so only a confirmed one is checked against the others.
+    if (target && cur.status === "CONFIRMED") await assertTableFree(tx, businessId, branchId, target, cur.date, cur.time, cur.id);
+    else if (target) {
+      const t = await tx.diningTable.findFirst({ where: { id: target, businessId, branchId }, select: { id: true } });
+      if (!t) throw new DomainError("Table not found.");
+    }
+    await tx.reservation.update({ where: { id: cur.id }, data: { tableId: target } });
+    await audit(tx, ctx, "reservation.table", "Reservation", cur.id, { tableId: target });
+  });
+}
+
+/**
+ * The party has arrived: start their order on the table and mark the booking seated, in one step. The table is the booking's own, or
+ * the one given (a guest who asks to sit somewhere else). Only on the day of the booking, and only a table with no open bill.
+ * Safe to repeat: the same booking always gives the same order.
+ */
+export async function seatReservation(ctx: TenantContext, id: string, tableId?: string): Promise<{ orderId: string; tableLabel: string }> {
+  need(ctx);
+  const { businessId, branchId } = scope(ctx);
+  const cur = await db.reservation.findFirst({ where: { id, businessId, branchId } });
+  if (!cur) throw new DomainError("Booking not found.");
+  if (cur.status === "SEATED" && cur.orderId && cur.tableId) {
+    const t = await db.diningTable.findFirst({ where: { id: cur.tableId, businessId }, select: { label: true } });
+    return { orderId: cur.orderId, tableLabel: t?.label ?? "" };
+  }
+  if (cur.status !== "CONFIRMED") throw new DomainError(cur.status === "REQUESTED" ? "Confirm the booking first." : "That booking cannot be seated.");
+  const biz = await db.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
+  if (cur.date !== nowIn(biz.timezone).today) throw new DomainError(`This booking is for ${cur.date}. It can be seated on that day.`);
+  const target = tableId || cur.tableId;
+  if (!target) throw new DomainError("Choose a table to seat them at.");
+  const table = await db.diningTable.findFirst({ where: { id: target, businessId, branchId }, select: { id: true, label: true } });
+  if (!table) throw new DomainError("Table not found.");
+  const order = await createOrder(ctx, { type: "DINE_IN", tableId: table.id, idempotencyKey: `seat-${cur.id}` });
+  const moved = await db.reservation.updateMany({ where: { id: cur.id, businessId, status: "CONFIRMED" }, data: { status: "SEATED", tableId: table.id, orderId: order.id, seatedAt: new Date() } });
+  if (moved.count === 0) throw new DomainError("That booking was just changed by someone else.");
+  await db.$transaction((tx) => audit(tx, ctx, "reservation.seated", "Reservation", cur.id, { tableId: table.id, orderId: order.id, name: cur.name }));
+  return { orderId: order.id, tableLabel: table.label };
+}
+
+/** Today's confirmed bookings that hold a table, for the floor map and the "coming up" list. */
+export async function todaysBookings(ctx: TenantContext) {
+  if (!can(ctx, "order.edit") || !ctx.branchId) return { floor: new Map<string, FloorReservation>(), coming: [] as ComingBooking[] };
+  const { businessId, branchId } = scope(ctx);
+  const biz = await db.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
+  const { today, minute } = nowIn(biz.timezone);
+  const [rows, tables] = await Promise.all([
+    db.reservation.findMany({ where: { businessId, branchId, date: today, status: "CONFIRMED" }, orderBy: { time: "asc" } }),
+    db.diningTable.findMany({ where: { businessId, branchId }, select: { id: true, label: true } }),
+  ]);
+  const label = new Map(tables.map((t) => [t.id, t.label]));
+  const floor = floorReservations(rows, minute);
+  const coming = rows
+    .map((r): ComingBooking => ({ id: r.id, tableId: r.tableId, tableLabel: r.tableId ? (label.get(r.tableId) ?? null) : null, name: r.name, partySize: r.partySize, time: r.time, minutesUntil: toMinutes(r.time) - minute }))
+    .filter((r) => r.minutesUntil > -HOLD_MINUTES)
+    .slice(0, 8);
+  return { floor, coming };
+}
+
+export interface ComingBooking {
+  id: string;
+  tableId: string | null;
+  tableLabel: string | null;
+  name: string;
+  partySize: number;
+  time: string;
+  /** Minutes until the booking; negative once its time has passed. */
+  minutesUntil: number;
+}
+
 export interface StatusResult {
   sms: "sent" | "failed" | "not-set-up" | "not-sent";
   message?: string;
@@ -151,7 +245,8 @@ export async function setReservationStatus(ctx: TenantContext, id: string, to: R
     const cur = await tx.reservation.findFirst({ where: { id, businessId, branchId } });
     if (!cur) throw new DomainError("Booking not found.");
     if (!canMove(cur.status, to)) throw new DomainError("That booking cannot be changed to that.");
-    const tableId = opts.tableId || cur.tableId;
+    // "auto": the smallest free table that fits the party, so the person does not have to work it out.
+    const tableId = opts.tableId === AUTO_TABLE ? (to === "CONFIRMED" ? await autoTable(tx, businessId, branchId, cur) : cur.tableId) : opts.tableId || cur.tableId;
     if (to === "CONFIRMED" && tableId) await assertTableFree(tx, businessId, branchId, tableId, cur.date, cur.time, cur.id);
     const next = await tx.reservation.update({ where: { id: cur.id }, data: { status: to, tableId: tableId || null, ...(to === "CONFIRMED" ? { confirmedAt: new Date() } : {}) } });
     await audit(tx, ctx, `reservation.${to.toLowerCase()}`, "Reservation", cur.id, { name: cur.name });

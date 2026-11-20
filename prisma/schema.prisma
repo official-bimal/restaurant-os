@@ -223,6 +223,7 @@ model Business {
   customRoles      CustomRole[]
   printers         Printer[]
   displaySetting   DisplaySetting?
+  stockCounts      StockCount[]
   displays         CustomerDisplay[]
   preferences      UserPreference[]
   logo             BusinessLogo?
@@ -975,12 +976,39 @@ model StockMovement {
   note          String?
   createdById   String?
   createdAt     DateTime          @default(now())
+  /// For waste: why (SPOILED, EXPIRED, DROPPED, STAFF_MEAL, PREP_LOSS, OTHER), so waste can be added up by cause.
+  reason        String?
+  /// The count sheet this correction came from, when it came from one.
+  countId       String?
 
   stockItem StockItem @relation(fields: [businessId, stockItemId], references: [businessId, id], onDelete: Cascade)
   branch    Branch    @relation(fields: [businessId, branchId], references: [businessId, id], onDelete: Cascade)
 
   @@index([businessId, stockItemId, createdAt])
   @@index([businessId, kind, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, countId])
+}
+
+/**
+ * One count of the shelves: someone walked round, wrote down what is really there, and the book quantities were corrected in one go.
+ * Each correction is a COUNT movement carrying this sheet's id.
+ */
+model StockCount {
+  id           String   @id @default(cuid())
+  businessId   String
+  branchId     String
+  note         String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  /// How many items were counted, and how many of them were different from the book.
+  itemsCounted Int
+  itemsChanged Int
+  /// What the differences are worth, in paisa (negative: stock was missing).
+  valueChange  Int      @default(0)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   @@index([businessId, branchId, createdAt])
 }
 
@@ -2299,6 +2327,9 @@ model Reservation {
   createdById String?
   createdAt   DateTime          @default(now())
   confirmedAt DateTime?
+  /// When the party was seated, and the order that was started for them at that moment.
+  seatedAt    DateTime?
+  orderId     String?
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 

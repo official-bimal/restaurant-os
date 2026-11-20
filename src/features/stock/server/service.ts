@@ -5,6 +5,7 @@ import { DomainError } from "@/server/errors";
 import { audit, type Tx } from "@/server/audit";
 import { scope } from "@/server/branch";
 import { costOf, isUnit, stockStatus, weightedAverageCost } from "@/features/stock/stock";
+import { isWasteReason, wasteReasonLabel } from "@/features/stock/count";
 import { activeLevelFor, ensureLevels, levelFor } from "./levels";
 
 /**
@@ -238,10 +239,13 @@ export async function applyPurchaseLines(
   }
 }
 
-export async function recordWaste(ctx: TenantContext, input: { stockItemId: string; quantity: number; reason: string }) {
+/** `category` is one of the listed causes; the free-text `reason` is then optional (the cause's own name is used when it is left blank). */
+export async function recordWaste(ctx: TenantContext, input: { stockItemId: string; quantity: number; reason: string; category?: string }) {
   need(ctx, "stock.waste");
   const quantity = wholeQty(input.quantity);
-  const reason = cleanReason(input.reason);
+  if (input.category !== undefined && input.category !== "" && !isWasteReason(input.category)) throw new DomainError("Choose why it was thrown away from the list.");
+  const category = input.category ? input.category : null;
+  const reason = category && input.reason.trim() === "" ? wasteReasonLabel(category) : cleanReason(input.reason);
   await db.$transaction(async (tx) => {
     const item = await tx.stockItem.findFirst({ where: { id: input.stockItemId, businessId: ctx.businessId, active: true } });
     if (!item) throw new DomainError("Stock item not found.");
@@ -261,10 +265,11 @@ export async function recordWaste(ctx: TenantContext, input: { stockItemId: stri
         unitCostMilli: level.costMilli,
         totalCost: -costOf(quantity, level.costMilli),
         note: reason,
+        reason: category,
         createdById: ctx.userId,
       },
     });
-    await audit(tx, ctx, "stock.waste", "StockItem", item.id, { quantity, reason });
+    await audit(tx, ctx, "stock.waste", "StockItem", item.id, { quantity, reason, category });
   });
 }
 

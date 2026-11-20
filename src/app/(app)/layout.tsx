@@ -6,7 +6,10 @@ import { redirect } from "next/navigation";
 import { db } from "@/server/db";
 import { requireTenant } from "@/server/auth";
 import { logout } from "@/app/login/actions";
-import { inboxCount } from "@/features/guest/server/service";
+import { inboxCount, staffRequests } from "@/features/guest/server/service";
+import { ringAlerts } from "@/features/guest/alerts";
+import { RequestBar } from "@/components/request-bar";
+import { completeRequestHereAction } from "./orders/guest-actions";
 import { onlineInboxCount } from "@/features/online/server/service";
 import { unresolvedCount } from "@/features/feedback/server/service";
 import { lowStockCount } from "@/features/stock/server/service";
@@ -51,7 +54,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const ctx = await requireTenant();
   // A rider has their own page and sees nothing else.
   if (ctx.role === "RIDER") redirect("/deliveries");
-  const [theme, logo, business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting, hukkaLong, hukkaCategories, reservationsWaiting] = await Promise.all([
+  const [theme, logo, business, user, waiting, lowRatings, lowStock, myBranches, notifications, clock, ownerAlerts, onlineWaiting, hukkaLong, hukkaCategories, reservationsWaiting, guestRequests] = await Promise.all([
     getTheme(ctx),
     db.businessLogo.findUnique({ where: { businessId: ctx.businessId }, select: { updatedAt: true } }),
     db.business.findUniqueOrThrow({ where: { id: ctx.businessId } }),
@@ -67,12 +70,17 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     hukkaAlertCount(ctx),
     db.menuCategory.count({ where: { businessId: ctx.businessId, OR: [{ name: { contains: "hukka", mode: "insensitive" } }, { name: { contains: "shisha", mode: "insensitive" } }, { name: { contains: "hookah", mode: "insensitive" } }] } }),
     reservationsWaitingCount(ctx),
+    staffRequests(ctx),
   ]);
   const hukkaOn = hukkaCategories > 0;
 
   // The badge and the chime follow what this person has not read yet.
   const unreadNotifications = notifications.filter((n) => !n.read);
-  const urgent = unreadNotifications.filter((n) => n.level === "alert").map((n) => ({ id: n.id, title: n.title }));
+  // A guest asking for the bill or the waiter rings too, and rings again if nobody has come after a couple of minutes.
+  const urgent = [
+    ...unreadNotifications.filter((n) => n.level === "alert").map((n) => ({ id: n.id, title: n.title })),
+    ...ringAlerts(guestRequests, new Date()),
+  ];
 
   const { home, sections } = buildNav({
     role: ctx.role,
@@ -143,6 +151,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div data-ui={theme.mode.toLowerCase()} style={accentVars(theme.accent) as React.CSSProperties} className="min-h-screen">
     <AppShell brand={brand} top={top} nav={<NavLinks home={home} sections={sections} />} bottom={bottom} tabs={tabs} alerts={unreadNotifications.length}>
+      <RequestBar
+        items={guestRequests.map((r) => ({ id: r.id, kind: r.kind, tableLabel: r.tableLabel, createdAt: r.createdAt.toISOString(), orderId: r.orderId, total: r.total }))}
+        done={completeRequestHereAction}
+      />
       {children}
     </AppShell>
     </div>

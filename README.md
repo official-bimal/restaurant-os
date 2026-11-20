@@ -282,3 +282,21 @@ Limits: ingredient cost uses today's average cost, not the cost on the day of th
 - **Safe by design**: a guest can only pay an open bill at their own table; not while their latest order is waiting for the staff to accept it; at most 5 starts per bill in 5 minutes; one live payment per bill (a cashier starting one replaces it); a payment is used once; and if the bill changed after they paid (an item was added), it is left paid and open and the staff are told to settle it with the cashier's "complete" button and the customer.
 - **Discounts**: guests always pay the full price. To give a discount, start the payment from the order page as before.
 - **Limits**: eSewa and Khalti are still untried against their real servers from this machine (only their sandbox rules, in tests); the pay page for guests is English only.
+
+## Counting the shelves, and waste
+
+- **Count the shelves** (Stock, then *Count the shelves*): a sheet with every item and what the book says. Type what is really there; the difference shows as you type, and an item left blank is not counted and not touched. Saving corrects the book for the items you filled in, in one go, and keeps the differences as one count (who, when, what was missing or extra and what it is worth) that can be opened later. Count when nothing is being used, since the count replaces the book quantity at the moment it is saved. Only a manager or the owner can count.
+- **Waste** (Stock, then *Waste*): when something is thrown away, pick the cause (spoiled, expired, dropped or spilled, staff meal, lost in preparation, other) and add details if you like. The page adds waste up by cause and by item for any period, at each item's average cost, so it is clear where the money is going. Kitchen staff can record waste; only people who may see costs see the report.
+
+## Guests asking for the bill or the waiter
+
+- A guest who taps *Bill* or *Call waiter* on the table page now shows up **on every staff page**, not only Orders: a strip at the top says "Table T3 wants the bill, Rs 1,240 so far, 2 min" with **Open bill** (straight to the order) and **Done**. It turns red once someone has waited more than 2 minutes (5 for water).
+- It **rings** on the devices that have *Sound* or *Pop-ups* switched on (Alerts on this device), and rings again when a request is late, so one that is being ignored is not missed. Water is listed on the Orders page but does not ring.
+- The Orders page and its inbox show the same requests with the waiting time and the bill so far.
+
+## Reservations and tables
+
+- **The floor map shows bookings**: a table held for a confirmed booking today shows "Reserved 19:30 · Sita ×4", and is outlined in violet when the booking is within the hour (or late), so a walk-in is not seated there. A *Booked today* strip on the Orders page lists what is coming and how soon.
+- **Pick the best table for me**: confirming a request can choose the smallest free table that fits the party at that time (and says when there is none). Every table in the pickers shows its seats, whether it is too small, and who holds it around that time (held tables cannot be chosen). A confirmed booking can be given another table at any time.
+- **Seat them**: on the day, *Seat them and open the order* starts the table's order and marks the booking seated in one step and goes straight to the order. A different table can be chosen if the guests ask; a table that still has an open bill is refused. Pressing it twice never makes a second order.
+- **Limits**: a booking only holds its table for 90 minutes either side of its time; the guest's name and phone are not yet attached to the table's loyalty record automatically.

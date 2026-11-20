@@ -1,4 +1,6 @@
-import { getInbox } from "@/features/guest/server/service";
+import Link from "next/link";
+import { getInbox, staffRequests } from "@/features/guest/server/service";
+import { isLate, waitedMinutes, waitedText } from "@/features/guest/alerts";
 import type { TenantContext } from "@/server/auth";
 import { formatNpr } from "@/features/billing/calc";
 import { acceptSubmissionAction, completeRequestAction, rejectSubmissionAction } from "./guest-actions";
@@ -11,8 +13,9 @@ function minutesAgo(date: Date): string {
 }
 
 export async function GuestInbox({ ctx }: { ctx: TenantContext }) {
-  const { submissions, requests } = await getInbox(ctx);
+  const [{ submissions }, requests] = await Promise.all([getInbox(ctx), staffRequests(ctx)]);
   if (submissions.length === 0 && requests.length === 0) return null;
+  const now = new Date();
 
   return (
     <section aria-label="Guest requests" className="space-y-3 rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
@@ -22,16 +25,26 @@ export async function GuestInbox({ ctx }: { ctx: TenantContext }) {
 
       {requests.length > 0 && (
         <ul className="flex flex-wrap gap-2">
-          {requests.map((r) => (
-            <li key={r.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm border border-stone-200 shadow-sm">
-              <span>
-                <strong>{r.table.label}</strong> · {KIND_LABEL[r.kind]} · {minutesAgo(r.createdAt)}
-              </span>
-              <form action={completeRequestAction.bind(null, r.id)}>
-                <button className="min-h-9 rounded-lg border border-stone-300 px-3 hover:bg-stone-50">Done</button>
-              </form>
-            </li>
-          ))}
+          {requests.map((r) => {
+            const late = isLate(r.kind, r.createdAt, now);
+            return (
+              <li key={r.id} className={`flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm border shadow-sm ${late ? "border-red-300" : "border-stone-200"}`}>
+                <span>
+                  <strong>{r.tableLabel}</strong> · {KIND_LABEL[r.kind]}
+                  {r.kind === "REQUEST_BILL" && r.total > 0 && <span className="text-stone-600"> · {formatNpr(r.total)} so far</span>}
+                  <span className={late ? "font-medium text-red-700" : "text-stone-500"}> · waiting {waitedText(waitedMinutes(r.createdAt, now))}</span>
+                </span>
+                {r.kind === "REQUEST_BILL" && r.orderId && (
+                  <Link href={`/orders/${r.orderId}`} className="min-h-9 rounded-lg bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700">
+                    Open bill
+                  </Link>
+                )}
+                <form action={completeRequestAction.bind(null, r.id)}>
+                  <button className="min-h-9 rounded-lg border border-stone-300 px-3 hover:bg-stone-50">Done</button>
+                </form>
+              </li>
+            );
+          })}
         </ul>
       )}
 

@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireTenant } from "@/server/auth";
 import { guarded } from "@/server/guarded";
+import { DomainError } from "@/server/errors";
+import { parseCounted } from "@/features/stock/count";
+import { recordCountSheet } from "@/features/stock/server/counts";
 import {
   archiveStockItem,
   createStockItem,
@@ -65,8 +68,29 @@ export async function wasteAction(formData: FormData) {
   const ctx = await requireTenant("stock.waste");
   const stockItemId = text(60).parse(formData.get("stockItemId") ?? "");
   const reason = text(300).parse(formData.get("reason") ?? "");
-  await guarded(BACK, () => recordWaste(ctx, { stockItemId, quantity: whole(formData.get("quantity")), reason }));
-  await done();
+  const category = text(30).parse(formData.get("category") ?? "");
+  const back = text(40).parse(formData.get("back") ?? "") === "waste" ? "/stock/waste" : BACK;
+  await guarded(back, () => recordWaste(ctx, { stockItemId, quantity: whole(formData.get("quantity")), reason, category }));
+  await done(back);
+}
+
+/** A whole count sheet: every box "count_<id>" that is filled in is counted; blank boxes are left alone. */
+export async function countSheetAction(formData: FormData) {
+  const ctx = await requireTenant("stock.manage");
+  const lines: { stockItemId: string; counted: number }[] = [];
+  let bad = false;
+  for (const [name, value] of formData.entries()) {
+    if (!name.startsWith("count_")) continue;
+    const counted = parseCounted(String(value));
+    if (counted === "bad") bad = true;
+    else if (counted !== null) lines.push({ stockItemId: name.slice(6), counted });
+  }
+  const note = text(300).parse(formData.get("note") ?? "");
+  const sheet = await guarded("/stock/count", async () => {
+    if (bad) throw new DomainError("Every amount must be a whole number, zero or more.");
+    return recordCountSheet(ctx, { lines, note });
+  });
+  await done(`/stock/count/${sheet.id}`);
 }
 
 export async function countAction(formData: FormData) {

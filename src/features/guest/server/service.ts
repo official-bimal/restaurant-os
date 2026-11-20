@@ -20,6 +20,7 @@ import { addOnNames, groupRulesForMenu, priceAddOns } from "@/features/menu/serv
 import { pushToTeam } from "@/features/notifications/server/push";
 import { branchMenuOverrides, effectiveItem, hiddenDishIds } from "@/features/menu/server/branch-menu";
 import { cleanWifi } from "@/features/guest/wifi";
+import { sortRequests } from "@/features/guest/alerts";
 
 /** Stored Wi-Fi settings that no longer pass the checks (edited by hand in the database) are simply not shown. */
 function cleanWifiOrNull(raw: { name: string; password: string; security: string; hidden: boolean }) {
@@ -457,6 +458,39 @@ export async function getInbox(ctx: TenantContext) {
     })),
     requests,
   };
+}
+
+/**
+ * What guests are asking for at the tables of this branch, for the alert bar and the inbox: the bill, the waiter, water. A request for
+ * the bill also says what the bill comes to so far (before charges) and which order to open, so the person can go straight to it.
+ */
+export async function staffRequests(ctx: TenantContext) {
+  if (!can(ctx, "order.edit") || !ctx.branchId) return [];
+  const open = await db.serviceRequest.findMany({
+    where: { businessId: ctx.businessId, status: "OPEN", table: { branchId: ctx.branchId } },
+    include: { table: { select: { label: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (open.length === 0) return [];
+  const orders = await db.order.findMany({
+    where: { businessId: ctx.businessId, tableId: { in: [...new Set(open.map((r) => r.tableId))] }, status: { in: ["OPEN", "SERVED"] } },
+    select: { id: true, tableId: true, createdAt: true, items: { where: { status: { not: "CANCELLED" } }, select: { unitPrice: true, quantity: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const rows = open.map((r) => {
+    const mine = orders.filter((o) => o.tableId === r.tableId);
+    return {
+      id: r.id,
+      kind: r.kind,
+      tableId: r.tableId,
+      tableLabel: r.table.label,
+      createdAt: r.createdAt,
+      orderId: mine[0]?.id ?? null,
+      bills: mine.length,
+      total: mine.reduce((s, o) => s + o.items.reduce((n, i) => n + i.unitPrice * i.quantity, 0), 0),
+    };
+  });
+  return sortRequests(rows);
 }
 
 export async function inboxCount(ctx: TenantContext): Promise<number> {

@@ -3,8 +3,10 @@ import { db } from "@/server/db";
 import type { TenantContext } from "@/server/auth";
 import { addDays, localDate } from "@/lib/business-day";
 import {
+  AUTO_TABLE,
   cancelOwnReservation,
   createReservation,
+  setReservationTable,
   getReservationByToken,
   listReservations,
   lookupReservationBranch,
@@ -117,11 +119,47 @@ describe("staff handle the bookings", () => {
     expect((await db.reservation.findFirstOrThrow({ where: { id: b.id } })).status).toBe("NO_SHOW");
   });
 
+  it("picks the best free table by itself, and says when there is none", async () => {
+    const date = addDays(nextWeek, 3);
+    const big = await db.diningTable.create({ data: { businessId, branchId, areaId: (await db.area.findFirstOrThrow({ where: { businessId } })).id, label: "T3", capacity: 8 } });
+    // T1 and T2 seat 4, T3 seats 8. A party of 2 gets the first small table; a party of 6 can only have T3.
+    // Requests from guests wait to be confirmed; "pick the best table" is chosen when staff confirm.
+    const request = (name: string, phone: string, partySize: number, time: string) => db.reservation.create({ data: { businessId, branchId, name, phone, partySize, date, time, token: `${stamp}${name}${time}`.replace(/\W/g, "").padEnd(20, "x") } });
+    const tableOf = async (id: string) => (await db.reservation.findFirstOrThrow({ where: { id } })).tableId;
+    const a = await request("A", "+9779870000001", 2, "19:00");
+    await setReservationStatus(owner, a.id, "CONFIRMED", { tableId: AUTO_TABLE });
+    expect(await tableOf(a.id)).toBe(tableA);
+    const b = await request("B", "+9779870000002", 2, "19:00");
+    await setReservationStatus(owner, b.id, "CONFIRMED", { tableId: AUTO_TABLE });
+    expect(await tableOf(b.id)).toBe(tableB);
+    const c = await request("C", "+9779870000003", 6, "19:30");
+    await setReservationStatus(owner, c.id, "CONFIRMED", { tableId: AUTO_TABLE });
+    expect(await tableOf(c.id)).toBe(big.id);
+    const d = await request("D", "+9779870000004", 6, "19:00");
+    await expect(setReservationStatus(owner, d.id, "CONFIRMED", { tableId: AUTO_TABLE })).rejects.toThrow(/No table for 6/);
+    // The request stays as it was when nothing could be found, and can still be confirmed without a table.
+    expect((await db.reservation.findFirstOrThrow({ where: { id: d.id } })).status).toBe("REQUESTED");
+    await setReservationStatus(owner, d.id, "CONFIRMED");
+  });
+
+  it("moves a booking to another table, but not onto one that is held at that time", async () => {
+    const date = addDays(nextWeek, 5);
+    const a = await createReservation(owner, { name: "A", phone: "9841000001", partySize: 2, date, time: "18:00", tableId: tableA });
+    await createReservation(owner, { name: "B", phone: "9841000002", partySize: 2, date, time: "18:30", tableId: tableB });
+    await expect(setReservationTable(owner, a.id, tableB)).rejects.toThrow(/already booked/);
+    await setReservationTable(owner, a.id, null);
+    expect((await db.reservation.findFirstOrThrow({ where: { id: a.id } })).tableId).toBeNull();
+    await setReservationTable(owner, a.id, tableA);
+    expect((await db.reservation.findFirstOrThrow({ where: { id: a.id } })).tableId).toBe(tableA);
+    await expect(setReservationTable(kitchen, a.id, tableA)).rejects.toThrow(/permission/);
+    await expect(setReservationTable(owner, a.id, "nope")).rejects.toThrow(/Table not found/);
+  });
+
   it("lists a day for people who handle orders only, and never another branch's bookings", async () => {
     const { rows, tables } = await listReservations(owner, nextWeek);
     expect(rows.length).toBeGreaterThanOrEqual(5);
     expect(rows.every((r) => r.branchId === branchId)).toBe(true);
-    expect(tables).toHaveLength(2);
+    expect(tables).toHaveLength(3); // T1, T2, and the big T3 made for the auto-pick test
     await expect(listReservations(kitchen, nextWeek)).rejects.toThrow(/permission/);
     await expect(listReservations(owner, "nope")).rejects.toThrow(/valid date/);
   });

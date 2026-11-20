@@ -55,6 +55,97 @@ export function clash(a: { date: string; time: string }, b: { date: string; time
   return a.date === b.date && Math.abs(toMinutes(a.time) - toMinutes(b.time)) < HOLD_MINUTES;
 }
 
+/** Whether a table has room for the party. */
+export function fits(capacity: number, partySize: number): boolean {
+  return capacity >= partySize;
+}
+
+export interface BookedTable {
+  id: string;
+  tableId: string;
+  date: string;
+  time: string;
+  name: string;
+}
+
+export interface TableChoice {
+  id: string;
+  label: string;
+  capacity: number;
+  /** Room for the whole party. */
+  fits: boolean;
+  /** Not held for anyone else around this time. */
+  free: boolean;
+  /** Who holds it, when it is not free. */
+  heldBy?: string;
+  heldAt?: string;
+}
+
+/** For one booking: each table, whether it is big enough and whether it is free at that time (the booking's own hold does not count against it). */
+export function tableChoices(
+  tables: { id: string; label: string; capacity: number }[],
+  booked: BookedTable[],
+  r: { id: string; date: string; time: string; partySize: number },
+): TableChoice[] {
+  return tables.map((t) => {
+    const other = booked.find((b) => b.tableId === t.id && b.id !== r.id && clash(r, b));
+    return { id: t.id, label: t.label, capacity: t.capacity, fits: fits(t.capacity, r.partySize), free: !other, ...(other ? { heldBy: other.name, heldAt: other.time } : {}) };
+  });
+}
+
+/** The table to give a party by default: free, big enough, and the smallest such table, so big tables stay for big parties. The list order breaks ties. */
+export function bestTable(choices: TableChoice[]): TableChoice | null {
+  let best: TableChoice | null = null;
+  for (const c of choices) if (c.free && c.fits && (!best || c.capacity < best.capacity)) best = c;
+  return best;
+}
+
+export type FloorState = "later" | "soon" | "due" | "late";
+
+export interface FloorReservation {
+  id: string;
+  tableId: string;
+  name: string;
+  partySize: number;
+  time: string;
+  state: FloorState;
+  /** Minutes until the booking (negative once the time has passed). */
+  minutesUntil: number;
+}
+
+/** A booking that is this close (minutes) is shown as "soon", and one this far past its time as "late". */
+export const SOON_MINUTES = 60;
+export const DUE_MINUTES = 15;
+
+/**
+ * What the floor map says about each table today: the next booking that still matters. Bookings already seated or cancelled are not
+ * shown, and neither is one that is long past its time (the hold has run out). When a table has several, the earliest one that still
+ * counts is shown.
+ */
+export function floorReservations(
+  rows: { id: string; tableId: string | null; name: string; partySize: number; time: string; status: ReservationStatus }[],
+  nowMinute: number,
+): Map<string, FloorReservation> {
+  const out = new Map<string, FloorReservation>();
+  const live = rows
+    .filter((r): r is typeof r & { tableId: string } => r.status === "CONFIRMED" && !!r.tableId)
+    .map((r) => ({ r, minutesUntil: toMinutes(r.time) - nowMinute }))
+    .filter((x) => x.minutesUntil > -HOLD_MINUTES)
+    .sort((a, b) => a.minutesUntil - b.minutesUntil);
+  for (const { r, minutesUntil } of live) {
+    if (out.has(r.tableId)) continue;
+    const state: FloorState = minutesUntil > SOON_MINUTES ? "later" : minutesUntil > DUE_MINUTES ? "soon" : minutesUntil >= -DUE_MINUTES ? "due" : "late";
+    out.set(r.tableId, { id: r.id, tableId: r.tableId, name: r.name, partySize: r.partySize, time: r.time, state, minutesUntil });
+  }
+  return out;
+}
+
+/** A short line for a table's tile: "Reserved 19:30 · Sita ×4". */
+export function reservedLine(f: Pick<FloorReservation, "time" | "name" | "partySize" | "state">): string {
+  const who = `${f.name.trim().split(" ")[0]} ×${f.partySize}`;
+  return f.state === "late" ? `Late: ${f.time} · ${who}` : `Reserved ${f.time} · ${who}`;
+}
+
 /** The message sent to a guest when a booking is confirmed. */
 export function confirmationText(r: { name: string; partySize: number; date: string; time: string }, businessName: string): string {
   return `Hi ${r.name.trim().split(" ")[0]}, your table for ${r.partySize} at ${businessName} is confirmed for ${r.date} at ${r.time}. We hold it for 15 minutes. To change it, please call us.`;

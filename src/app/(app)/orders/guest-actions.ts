@@ -27,6 +27,14 @@ export async function rejectSubmissionAction(id: string, formData: FormData) {
   await done();
 }
 
+/** From the alert bar: mark it handled and stay on the page the person is on. */
+export async function completeRequestHereAction(id: string) {
+  const ctx = await requireTenant("order.edit");
+  // Another person may have handled it a moment ago; the bar just refreshes either way.
+  await completeRequest(ctx, id).catch(() => undefined);
+  revalidatePath("/", "layout");
+}
+
 export async function completeRequestAction(id: string) {
   const ctx = await requireTenant("order.edit");
   await guarded(BACK, () => completeRequest(ctx, id));

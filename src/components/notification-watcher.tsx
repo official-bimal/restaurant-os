@@ -91,7 +91,28 @@ export function NotificationWatcher({ alerts, push }: { alerts: Alert[]; push: P
       router.refresh();
     };
     const id = setInterval(() => void tick(), 15000);
-    return () => clearInterval(id);
+    // A guest asking for the bill or the waiter is told to the page at once, not at the next 15-second refresh.
+    let source: EventSource | null = null;
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    if (typeof EventSource !== "undefined") {
+      source = new EventSource("/api/live");
+      source.addEventListener("change", (e) => {
+        try {
+          if ((JSON.parse((e as MessageEvent<string>).data) as { topic?: string }).topic !== "guest") return;
+        } catch {
+          return;
+        }
+        clearTimeout(debounce);
+        debounce = setTimeout(() => {
+          if (document.visibilityState === "visible") router.refresh();
+        }, 300);
+      });
+    }
+    return () => {
+      clearInterval(id);
+      clearTimeout(debounce);
+      source?.close();
+    };
   }, [router]);
 
   // Alert only for ones not seen before in this tab. The first load just records what is already there.

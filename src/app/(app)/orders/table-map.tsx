@@ -24,6 +24,8 @@ export interface MapTable {
   /** Where it sits on the floor plan (thousandths of the plan's width and height), or null when not placed. */
   posX: number | null;
   posY: number | null;
+  /** A confirmed booking today that holds this table (the next one that still counts). */
+  reserved?: { id: string; line: string; state: "later" | "soon" | "due" | "late" } | null;
 }
 
 export interface MapArea {
@@ -57,7 +59,9 @@ export function TableMap({ areas, keyBase, canCreate, canMove = false }: { areas
 
   const tile = (t: MapTable, compact = false) => {
     const busy = !!t.orderId;
-    const ring = t.alert ? "ring-2 ring-amber-400" : "ring-1 ring-stone-200";
+    // A table held for a booking that is about to arrive (or is late) is outlined in violet, so nobody seats a walk-in there.
+    const holding = t.reserved && (t.reserved.state === "soon" || t.reserved.state === "due" || t.reserved.state === "late");
+    const ring = t.alert ? "ring-2 ring-amber-400" : holding ? "ring-2 ring-violet-400" : "ring-1 ring-stone-200";
     const inner = (
       <>
         {t.alert && (
@@ -81,9 +85,13 @@ export function TableMap({ areas, keyBase, canCreate, canMove = false }: { areas
                 {t.served ? " · served" : ""}
               </span>
               {t.alert && <span className="block font-medium text-amber-800">{t.alert}</span>}
+              {holding && <span className="block font-medium text-violet-800">Booked: {t.reserved!.line.replace(/^(Reserved|Late:) /, "")}</span>}
             </>
           ) : (
-            <span className="block text-stone-500">{compact ? "free" : `${t.capacity} seats`}</span>
+            <>
+              <span className="block text-stone-500">{compact ? "free" : `${t.capacity} seats`}</span>
+              {t.reserved && <span className={`block font-medium ${holding ? "text-violet-800" : "text-stone-500"}`}>{t.reserved.line}</span>}
+            </>
           )}
         </span>
       </>

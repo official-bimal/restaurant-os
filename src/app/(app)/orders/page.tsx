@@ -11,6 +11,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { GuestInbox } from "./guest-inbox";
 import { TableMap, type MapArea } from "./table-map";
 import { tableAlerts } from "@/features/guest/server/service";
+import { todaysBookings } from "@/features/reservations/server/service";
+import { reservedLine } from "@/features/reservations/reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
   const [orders, tables, zones, bands] = await Promise.all([listOpenOrders(ctx), listTables(ctx), activeZones(ctx), activeBands(ctx)]);
   // One key per page render: a double tap submits the same key, so only one order is made.
   const idempotencyKey = randomUUID();
-  const alerts = await tableAlerts(ctx);
+  const [alerts, bookings] = await Promise.all([tableAlerts(ctx), todaysBookings(ctx)]);
   // The floor map: each table, and what is on it right now.
   const byTable = new Map<string, typeof orders>();
   for (const o of orders) if (o.tableId) byTable.set(o.tableId, [...(byTable.get(o.tableId) ?? []), o]);
@@ -42,6 +44,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
       alert: alerts[t.id] ?? null,
       posX: t.posX,
       posY: t.posY,
+      reserved: bookings.floor.get(t.id) ? { id: bookings.floor.get(t.id)!.id, line: reservedLine(bookings.floor.get(t.id)!), state: bookings.floor.get(t.id)!.state } : null,
     });
   }
 
@@ -59,6 +62,28 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
         <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-900">
           {moved.slice(0, 80)}
         </p>
+      )}
+
+      {bookings.coming.length > 0 && (
+        <section aria-label="Bookings coming up" className="rounded-xl bg-violet-50 p-3 ring-1 ring-violet-200">
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="mr-auto text-sm font-semibold">Booked today</h2>
+            <Link href="/reservations" className="text-sm font-medium text-violet-800 underline">
+              All bookings
+            </Link>
+          </div>
+          <ul className="flex flex-wrap gap-2 text-sm">
+            {bookings.coming.map((b) => (
+              <li key={b.id} className="rounded-lg border border-violet-200 bg-white px-3 py-2">
+                <strong className="tabular-nums">{b.time}</strong> · {b.name} ×{b.partySize} · {b.tableLabel ? `Table ${b.tableLabel}` : "no table yet"}
+                <span className={b.minutesUntil < -15 ? "font-medium text-red-700" : "text-stone-500"}>
+                  {" "}
+                  · {b.minutesUntil > 0 ? `in ${b.minutesUntil} min` : b.minutesUntil >= -15 ? "due now" : `${-b.minutesUntil} min late`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {tables.length > 0 && (

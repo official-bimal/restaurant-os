@@ -4,6 +4,7 @@ import { can } from "@/server/permissions";
 import { listNotStockedHere, listStock } from "@/features/stock/server/service";
 import { db } from "@/server/db";
 import { formatNpr } from "@/features/billing/calc";
+import { WASTE_REASONS } from "@/features/stock/count";
 import { archiveItemAction, countAction, createItemAction, purchaseAction, setStockedAction, updateItemAction, wasteAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +84,14 @@ export default async function StockPage({ searchParams }: PageProps<"/stock">) {
             Recipes and food cost
           </Link>
         )}
+        {manage && (
+          <Link href="/stock/count" className={`${small} flex items-center`}>
+            Count the shelves
+          </Link>
+        )}
+        <Link href="/stock/waste" className={`${small} flex items-center`}>
+          Waste
+        </Link>
         <Link href="/stock/history" className={`${small} flex items-center`}>
           History
         </Link>
@@ -232,8 +241,18 @@ export default async function StockPage({ searchParams }: PageProps<"/stock">) {
                 <input name="quantity" type="number" min={1} required className={input} />
               </label>
               <label className="block font-medium">
-                Reason
-                <input name="reason" required minLength={3} maxLength={200} placeholder="e.g. spoiled, dropped" className={input} />
+                Why
+                <select name="category" defaultValue="SPOILED" className={input}>
+                  {WASTE_REASONS.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block font-medium">
+                Details (optional)
+                <input name="reason" maxLength={200} placeholder="e.g. fridge was left open" className={input} />
               </label>
               <button className="min-h-11 rounded-lg border border-stone-300 px-4 font-medium">Record waste</button>
             </form>
